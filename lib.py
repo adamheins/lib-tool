@@ -70,7 +70,8 @@ def do_add(**kwargs):
 
     keys = list(bib_info.entries_dict.keys())
     if len(keys) > 1:
-        print('It looks like there\'s more than one entry in the bibtex file. I\'m not sure what to do!')
+        print('It looks like there\'s more than one entry in the bibtex file. '
+            + 'I\'m not sure what to do!')
         return 1
 
     key = keys[0]
@@ -84,8 +85,12 @@ def do_add(**kwargs):
     archive_bib_path = os.path.join(archive_path, key + '.bib')
 
     os.mkdir(archive_path)
-    shutil.copy(pdf_fn, archive_pdf_path)
-    shutil.copy(bib_fn, archive_bib_path)
+    if kwargs['delete']:
+        shutil.move(pdf_fn, archive_pdf_path)
+        shutil.move(bib_fn, archive_bib_path)
+    else:
+        shutil.copy(pdf_fn, archive_pdf_path)
+        shutil.copy(bib_fn, archive_bib_path)
 
     print('Archived to {}.'.format(key))
     return 0
@@ -105,14 +110,19 @@ def main():
 
     grep_parser = subparsers.add_parser('grep')
     grep_parser.add_argument('regex', help='Search for the regex')
-    grep_parser.add_argument('-a', '--archive', action='store_true', help='Search the whole archive.')
-    grep_parser.add_argument('-b', '--bibtex', action='store_true', help='Search bibtex files.')
-    grep_parser.add_argument('-t', '--text', action='store_true', help='Search document text.')
+    grep_parser.add_argument('-a', '--archive', action='store_true',
+                             help='Search the whole archive.')
+    grep_parser.add_argument('-b', '--bibtex', action='store_true',
+                             help='Search bibtex files.')
+    grep_parser.add_argument('-t', '--text', action='store_true',
+                             help='Search document text.')
     grep_parser.set_defaults(func=do_grep)
 
     add_parser = subparsers.add_parser('add')
     add_parser.add_argument('pdf', help='PDF file.')
     add_parser.add_argument('bibtex', help='Associated bibtex file.')
+    add_parser.add_argument('-d', '--delete', action='store_true',
+                            help='Delete files after archiving.')
     add_parser.set_defaults(func=do_add)
 
     compile_parser = subparsers.add_parser('compile')
