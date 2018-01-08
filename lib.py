@@ -1,17 +1,30 @@
 #!/usr/bin/env python3
 
 import argparse
+import glob
 import os
+import re
 import shutil
 import sys
 
 import bibtexparser
-import glob
+import colorama
 
 
-LIB_ROOT = '/home/adam/doc/lib/library'
+LIB_ROOT = '/home/adam/doc/library'
 ARCHIVE_ROOT = os.path.join(LIB_ROOT, 'archive')
 SHELVES_ROOT = os.path.join(LIB_ROOT, 'shelves')
+
+
+def yellow(s):
+    return colorama.Fore.YELLOW + s + colorama.Fore.RESET
+
+def bold(s):
+    return colorama.Style.BRIGHT + s + colorama.Style.RESET_ALL
+
+
+def get_archive_path(key):
+    return os.path.join(ARCHIVE_ROOT, key)
 
 
 def compile_bib_info():
@@ -34,7 +47,41 @@ def do_ln(**kwargs):
 
 
 def do_grep(**kwargs):
-    print(kwargs)
+    ''' Search for a regex in the library. '''
+    if kwargs['ignore_case']:
+        regex = re.compile(kwargs['regex'], re.IGNORECASE)
+    else:
+        regex = re.compile(kwargs['regex'])
+
+    def repl(match):
+        return yellow(match.group(0))
+
+    if kwargs['bib']:
+        bib_dict = bibtexparser.loads(compile_bib_info()).entries_dict
+        output = []
+        for key, info in bib_dict.items():
+            count = 0
+            detail = []
+            for field, value in info.items():
+                result = regex.findall(value)
+                count += len(result)
+                if len(result) == 0:
+                    continue
+
+                s = regex.sub(repl, value)
+                detail.append('  {}: {}'.format(field, s))
+
+            if count > 0:
+                file_output = []
+                if count == 1:
+                    file_output.append('{}: 1 match'.format(bold(key)))
+                else:
+                    file_output.append('{}: {} matches'.format(bold(key), count))
+                if not kwargs['oneline']:
+                    file_output.append('\n'.join(detail))
+                output.append('\n'.join(file_output))
+        print('\n\n'.join(output))
+
 
 
 def entry_html(key, data):
@@ -79,7 +126,6 @@ def do_compile(**kwargs):
 
 def do_add(**kwargs):
     ''' Add a PDF and associated bibtex file to the archive. '''
-    # TODO -d to also delete current copies
     pdf_fn = kwargs['pdf']
     bib_fn = kwargs['bibtex']
 
@@ -94,7 +140,7 @@ def do_add(**kwargs):
 
     key = keys[0]
 
-    archive_path = os.path.join(ARCHIVE_ROOT, key)
+    archive_path = get_archive_path(key)
     if os.path.exists(archive_path):
         print('Archive {} already exists! Aborting.'.format(key))
         return 1
@@ -131,12 +177,14 @@ def main():
 
     grep_parser = subparsers.add_parser('grep')
     grep_parser.add_argument('regex', help='Search for the regex')
-    grep_parser.add_argument('-a', '--archive', action='store_true',
-                             help='Search the whole archive.')
-    grep_parser.add_argument('-b', '--bibtex', action='store_true',
+    grep_parser.add_argument('-b', '--bib', '--bibtex', action='store_true',
                              help='Search bibtex files.')
     grep_parser.add_argument('-t', '--text', action='store_true',
                              help='Search document text.')
+    grep_parser.add_argument('-o', '--oneline', action='store_true',
+                             help='Only output filename and match count.')
+    grep_parser.add_argument('-i', '--ignore-case', action='store_true',
+                             help='Case insensitive search.')
     grep_parser.set_defaults(func=do_grep)
 
     add_parser = subparsers.add_parser('add')
