@@ -59,6 +59,14 @@ def load_bib_dict(extra_cust=None):
     return bibtexparser.loads(compile_bib_info(), parser=parser).entries_dict
 
 
+def do_open(**kwargs):
+    # for pdfs
+    cmd = 'nohup xdg-open {} >/dev/null 2>&1 &'.format('foo.pdf')
+    subprocess.run(cmd, shell=True)
+
+    # for bibs use python-editor package
+
+
 def do_ln(**kwargs):
     doc = kwargs['document']
     cwd = os.getcwd()
