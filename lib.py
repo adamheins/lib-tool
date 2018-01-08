@@ -14,6 +14,17 @@ ARCHIVE_ROOT = os.path.join(LIB_ROOT, 'archive')
 SHELVES_ROOT = os.path.join(LIB_ROOT, 'shelves')
 
 
+def compile_bib_info():
+    bib_list = glob.glob(ARCHIVE_ROOT + '/**/*.bib')
+    bib_info_list = []
+
+    for bib_path in bib_list:
+        with open(bib_path) as bib_file:
+            bib_info_list.append(bib_file.read().strip())
+
+    return '\n\n'.join(bib_info_list)
+
+
 def do_ln(**kwargs):
     doc = kwargs['document']
     cwd = os.getcwd()
@@ -26,27 +37,34 @@ def do_grep(**kwargs):
     print(kwargs)
 
 
+def entry_html(key, data):
+    title = '<h2>{}</h2>'.format(data['title'])
+    year = '<p>{}</p>'.format(data['year'])
+    author = '<p>{}</p>'.format(data['author'])
+
+    text_link = '<a href="{}">(text)</a>'.format('')
+    bib_link = '<a href="{}">(bib)</a>'.format('')
+    links = '<div>{}{}</div>'.format(text_link, bib_link)
+
+    return '<div>{}{}{}{}</div>'.format(title, links, year, author)
+
+
 def do_index(**kwargs):
     # Create an index file with links and information for easy browsing.
-    pass
-
-
-def bib_info():
-    bib_list = glob.glob(ARCHIVE_ROOT + '/**/*.bib')
-    bib_info_list = []
-
-    for bib_path in bib_list:
-        with open(bib_path) as bib_file:
-            bib_info_list.append(bib_file.read().strip())
-
-    return '\n\n'.join(bib_info_list)
+    bib_dict = bibtexparser.loads(compile_bib_info()).entries_dict
+    index_entries = []
+    for key in bib_dict.keys():
+        index_entries.append(entry_html(key, bib_dict[key]))
+    index_html = '<html><body>' + ''.join(index_entries) + '</body></html>'
+    with open('index.html', 'w') as index_file:
+        index_file.write(index_html)
 
 
 def do_compile(**kwargs):
     ''' Compile a single bibtex file and/or a single directory of PDFs. '''
     if kwargs['bib']:
         with open('bibtex.bib', 'w') as bib_file:
-            bib_file.write(bib_info())
+            bib_file.write(compile_bib_info())
         print('Compiled bibtex files to bibtex.bib.')
 
     # TODO parse compiled bib file to get information about PDFs in an HTML file
@@ -107,6 +125,9 @@ def main():
     ln_parser = subparsers.add_parser('ln')
     ln_parser.add_argument('document', help='Document to link')
     ln_parser.set_defaults(func=do_ln)
+
+    ln_parser = subparsers.add_parser('index')
+    ln_parser.set_defaults(func=do_index)
 
     grep_parser = subparsers.add_parser('grep')
     grep_parser.add_argument('regex', help='Search for the regex')
