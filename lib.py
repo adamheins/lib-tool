@@ -8,9 +8,11 @@ import shutil
 import sys
 
 import bibtexparser
+import bibtexparser.customization as bibcust
 import colorama
 
 
+# TODO this should be loaded from a config file
 LIB_ROOT = '/home/adam/doc/library'
 ARCHIVE_ROOT = os.path.join(LIB_ROOT, 'archive')
 SHELVES_ROOT = os.path.join(LIB_ROOT, 'shelves')
@@ -38,6 +40,25 @@ def compile_bib_info():
     return '\n\n'.join(bib_info_list)
 
 
+def load_bib_dict(extra_cust=None):
+    def customizations(record):
+        record = bibcust.convert_to_unicode(record)
+
+        # Make authors semicolon-separated rather than and-separated.
+        authors = record['author']
+        record['author'] = authors.replace(' and', ';')
+
+        # Apply extra customization function is applicable.
+        if extra_cust:
+            record = extra_cust(record)
+        return record
+
+    parser = bibtexparser.bparser.BibTexParser()
+    parser.customization = customizations
+
+    return bibtexparser.loads(compile_bib_info(), parser=parser).entries_dict
+
+
 def do_ln(**kwargs):
     doc = kwargs['document']
     cwd = os.getcwd()
@@ -48,26 +69,47 @@ def do_ln(**kwargs):
 
 def do_grep(**kwargs):
     ''' Search for a regex in the library. '''
-    if kwargs['ignore_case']:
-        regex = re.compile(kwargs['regex'], re.IGNORECASE)
+
+    # Arguments
+    regex = kwargs['regex']
+
+    # Options
+    bib = kwargs['bib']
+    text = kwargs['text']
+    ignore_case = kwargs['ignore_case']
+    oneline = kwargs['oneline']
+
+    search_either = bib or text
+    search_bib = bib or not search_either
+    search_text = text or not search_either
+
+    if ignore_case:
+        regex = re.compile(regex, re.IGNORECASE)
     else:
-        regex = re.compile(kwargs['regex'])
+        regex = re.compile(regex)
 
     def repl(match):
         return yellow(match.group(0))
 
-    if kwargs['bib']:
-        bib_dict = bibtexparser.loads(compile_bib_info()).entries_dict
+    if search_bib:
+        bib_dict = load_bib_dict()
         output = []
         for key, info in bib_dict.items():
             count = 0
             detail = []
             for field, value in info.items():
+                # Skip the ID field; it's already a composition of parts of
+                # other fields.
+                if field == 'ID':
+                    continue
+
+                # Find all the matches.
                 result = regex.findall(value)
                 count += len(result)
                 if len(result) == 0:
                     continue
 
+                # Highlight the matches.
                 s = regex.sub(repl, value)
                 detail.append('  {}: {}'.format(field, s))
 
@@ -77,10 +119,14 @@ def do_grep(**kwargs):
                     file_output.append('{}: 1 match'.format(bold(key)))
                 else:
                     file_output.append('{}: {} matches'.format(bold(key), count))
-                if not kwargs['oneline']:
+                if not oneline:
                     file_output.append('\n'.join(detail))
                 output.append('\n'.join(file_output))
-        print('\n\n'.join(output))
+
+        if oneline:
+            print('\n'.join(output))
+        else:
+            print('\n\n'.join(output))
 
 
 
@@ -98,7 +144,7 @@ def entry_html(key, data):
 
 def do_index(**kwargs):
     # Create an index file with links and information for easy browsing.
-    bib_dict = bibtexparser.loads(compile_bib_info()).entries_dict
+    bib_dict = load_bib_dict()
     index_entries = []
     for key in bib_dict.keys():
         index_entries.append(entry_html(key, bib_dict[key]))
