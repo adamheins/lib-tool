@@ -64,6 +64,11 @@ def load_bib_dict(archive_path, extra_cust=None):
 
 def do_open(config, **kwargs):
     key = kwargs['key']
+
+    # When completing, the user may accidentally include a trailing slash.
+    if key[-1] == '/':
+        key = key[:-1]
+
     if kwargs['bib']:
         bib_path = os.path.join(config['archive'], key, key + '.bib')
         editor.edit(bib_path)

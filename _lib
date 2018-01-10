@@ -3,20 +3,45 @@
 # We don't want to show the descriptions.
 zstyle ':completion:*:*:lib:*:*' verbose no
 
-# Open subcommand.
-local -a subcmd_open
-_regex_words open "Open a file" $(ls $(lib where)/archive)
-subcmd_open=("$reply[@]")
+# # Open subcommand.
+# local -a subcmd_open
+# _regex_words open "Open a file" $(ls $(lib where)/archive)
+# subcmd_open=("$reply[@]")
+#
+# # Add subcommand.
+# local -a subcmd_add
+# _regex_words add "Add a document."
+#
+# # Commands.
+# local -a cmds
+# _regex_words cmd 'Command' 'open: :$subcmd_open' 'grep:grep' 'ln:ln' 'add:add:$subcmd_add'
+# cmds=("$reply[@]")
+#
+# _regex_arguments _lib /$'[^\0]##\0'/ "${cmds[@]}"
+# _lib "$@"
+_cmds() {
+  local subcmds=('open:open' 'add:add')
+  _describe 'command' subcmds
+}
 
+_arguments -C '1: :_cmds' ':arg1:->arg1' ':arg2:->arg2' '*::args:->args'
 
-# Grep subcommand.
-# TODO
-
-# Commands.
-local -a cmds
-_regex_words cmd 'Command' 'open: :$subcmd_open' 'grep:grep' 'ln:ln'
-cmds=("$reply[@]")
-
-_regex_arguments _lib /$'[^\0]##\0'/ "${cmds[@]}"
-_lib "$@"
-
+case $state in
+  (arg1)
+    case $line[1] in
+      (open)
+        _path_files -W $(lib where)/archive -/
+        ;;
+      (add)
+        _files -g "*.pdf"
+        ;;
+    esac
+    ;;
+  (arg2)
+    case $line[1] in
+      (add)
+        _files -g "*.bib"
+        ;;
+    esac
+    ;;
+esac
