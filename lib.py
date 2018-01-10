@@ -227,6 +227,16 @@ def do_add(config, **kwargs):
     return 0
 
 
+def do_where(config, **kwargs):
+    if kwargs['archive']:
+        print(config['archive'])
+    elif kwargs['shelves']:
+        print(config['shelves'])
+    else:
+        print(config['library'])
+    return 0
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(help='Command.')
@@ -270,6 +280,13 @@ def parse_args():
                                 help='Compile PDF documents.')
     compile_parser.set_defaults(func=do_compile)
 
+    where_parser = subparsers.add_parser('where')
+    where_parser.add_argument('-a', '--archive', action='store_true',
+                              help='Print location of archive.')
+    where_parser.add_argument('-s', '--shelves', action='store_true',
+                              help='Print location of shelves.')
+    where_parser.set_defaults(func=do_where)
+
     # Every subparser has an associated function that we call here, passing all
     # other options as arguments.
     args = parser.parse_args()
@@ -294,12 +311,6 @@ def main():
         return 1
 
     config = load_config(CONFIG_PATH)
-
-    # TODO obviously this must be dealt with...
-    if sys.argv[1] == 'where':
-        print(config['library'])
-        return 0
-
     args, func = parse_args()
     func(config, **args)
 
