@@ -15,8 +15,9 @@ import editor
 import yaml
 
 
-CONFIG_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)),
-                           'config.yaml')
+CONFIG_FILE_NAME = '.libconf.yaml'
+CONFIG_SEARCH_DIRS = [os.path.dirname(os.path.realpath(__file__)), os.getcwd(),
+                      os.path.expanduser('~')]
 
 
 def yellow(s):
@@ -25,10 +26,6 @@ def yellow(s):
 
 def bold(s):
     return colorama.Style.BRIGHT + s + colorama.Style.RESET_ALL
-
-
-def get_archive_path(archive_root, key):
-    return os.path.join(archive_root, key)
 
 
 def compile_bib_info(archive_root):
@@ -47,8 +44,7 @@ def load_bib_dict(archive_path, extra_cust=None):
         record = bibcust.convert_to_unicode(record)
 
         # Make authors semicolon-separated rather than and-separated.
-        authors = record['author']
-        record['author'] = authors.replace(' and', ';')
+        record['author'] = record['author'].replace(' and', ';')
 
         # Apply extra customization function is applicable.
         if extra_cust:
@@ -207,7 +203,7 @@ def do_add(config, **kwargs):
 
     key = keys[0]
 
-    archive_path = get_archive_path(config['archive'], key)
+    archive_path = os.path.join(config['archive'], key)
     if os.path.exists(archive_path):
         print('Archive {} already exists! Aborting.'.format(key))
         return 1
@@ -228,6 +224,7 @@ def do_add(config, **kwargs):
 
 
 def do_where(config, **kwargs):
+    ''' Print out library directories. '''
     if kwargs['archive']:
         print(config['archive'])
     elif kwargs['shelves']:
@@ -241,13 +238,16 @@ def parse_args():
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(help='Command.')
 
+    # Ln parser.
     ln_parser = subparsers.add_parser('ln')
     ln_parser.add_argument('document', help='Document to link')
     ln_parser.set_defaults(func=do_ln)
 
-    ln_parser = subparsers.add_parser('index')
-    ln_parser.set_defaults(func=do_index)
+    # Index parser.
+    index_parser = subparsers.add_parser('index')
+    index_parser.set_defaults(func=do_index)
 
+    # Grep parser.
     grep_parser = subparsers.add_parser('grep')
     grep_parser.add_argument('regex', help='Search for the regex')
     grep_parser.add_argument('-b', '--bib', '--bibtex', action='store_true',
@@ -260,6 +260,7 @@ def parse_args():
                              help='Case sensitive search.')
     grep_parser.set_defaults(func=do_grep)
 
+    # Add parser.
     add_parser = subparsers.add_parser('add')
     add_parser.add_argument('pdf', help='PDF file.')
     add_parser.add_argument('bibtex', help='Associated bibtex file.')
@@ -267,12 +268,14 @@ def parse_args():
                             help='Delete files after archiving.')
     add_parser.set_defaults(func=do_add)
 
-    add_parser = subparsers.add_parser('open')
-    add_parser.add_argument('key', help='Key for document to open.')
-    add_parser.add_argument('-b', '--bib', '--bibtex', action='store_true',
-                            help='Compile bibtex files.')
-    add_parser.set_defaults(func=do_open)
+    # Open parser.
+    open_parser = subparsers.add_parser('open')
+    open_parser.add_argument('key', help='Key for document to open.')
+    open_parser.add_argument('-b', '--bib', '--bibtex', action='store_true',
+                            help='Open bibtex files.')
+    open_parser.set_defaults(func=do_open)
 
+    # Compile subcommand.
     compile_parser = subparsers.add_parser('compile')
     compile_parser.add_argument('-b', '--bib', '--bibtex', action='store_true',
                                 help='Compile bibtex files.')
@@ -280,6 +283,7 @@ def parse_args():
                                 help='Compile PDF documents.')
     compile_parser.set_defaults(func=do_compile)
 
+    # Where subcommand.
     where_parser = subparsers.add_parser('where')
     where_parser.add_argument('-a', '--archive', action='store_true',
                               help='Print location of archive.')
@@ -295,13 +299,35 @@ def parse_args():
     return args, func
 
 
-def load_config(path):
+def find_config(search_dirs, config_name):
+    ''' Find the path to the configuration file. '''
+    for search_dir in search_dirs:
+        path = os.path.join(search_dir, config_name)
+        if os.path.exists(path):
+            return path
+    return None
+
+
+def load_config(search_dirs, config_name):
+    ''' Load the configuration parameters from file. '''
+    path = find_config(search_dirs, config_name)
+    if path is None:
+        print('Error: Could not find config file.')
+        return None
+
     with open(path) as f:
         config = yaml.load(f)
+
     config['library'] = os.path.expanduser(config['library'])
     config['archive'] = os.path.join(config['library'], 'archive')
     config['shelves'] = os.path.join(config['library'], 'shelves')
-    # TODO check if directories exist
+
+    # Check if each of these directories exist.
+    for key in ['library', 'archive', 'shelves']:
+        if not os.path.isdir(config[key]):
+            print('Error: {} does not exist!'.format(config[key]))
+            return None
+
     return config
 
 
@@ -310,10 +336,13 @@ def main():
         print('Usage: lib command [opts] [args]. Try --help.')
         return 1
 
-    config = load_config(CONFIG_PATH)
-    args, func = parse_args()
-    func(config, **args)
+    # Load the config.
+    config = load_config(CONFIG_SEARCH_DIRS, CONFIG_FILE_NAME)
+    if config is None:
+        return 1
 
+    args, func = parse_args()
+    return func(config, **args)
 
 
 if __name__ == '__main__':
