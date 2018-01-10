@@ -5,32 +5,34 @@ import glob
 import os
 import re
 import shutil
+import subprocess
 import sys
 
 import bibtexparser
 import bibtexparser.customization as bibcust
 import colorama
+import editor
+import yaml
 
 
-# TODO this should be loaded from a config file
-LIB_ROOT = '/home/adam/doc/library'
-ARCHIVE_ROOT = os.path.join(LIB_ROOT, 'archive')
-SHELVES_ROOT = os.path.join(LIB_ROOT, 'shelves')
+CONFIG_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                           'config.yaml')
 
 
 def yellow(s):
     return colorama.Fore.YELLOW + s + colorama.Fore.RESET
 
+
 def bold(s):
     return colorama.Style.BRIGHT + s + colorama.Style.RESET_ALL
 
 
-def get_archive_path(key):
-    return os.path.join(ARCHIVE_ROOT, key)
+def get_archive_path(archive_root, key):
+    return os.path.join(archive_root, key)
 
 
-def compile_bib_info():
-    bib_list = glob.glob(ARCHIVE_ROOT + '/**/*.bib')
+def compile_bib_info(archive_root):
+    bib_list = glob.glob(archive_root + '/**/*.bib')
     bib_info_list = []
 
     for bib_path in bib_list:
@@ -40,7 +42,7 @@ def compile_bib_info():
     return '\n\n'.join(bib_info_list)
 
 
-def load_bib_dict(extra_cust=None):
+def load_bib_dict(archive_path, extra_cust=None):
     def customizations(record):
         record = bibcust.convert_to_unicode(record)
 
@@ -56,26 +58,30 @@ def load_bib_dict(extra_cust=None):
     parser = bibtexparser.bparser.BibTexParser()
     parser.customization = customizations
 
-    return bibtexparser.loads(compile_bib_info(), parser=parser).entries_dict
+    bib_info = compile_bib_info(archive_path)
+    return bibtexparser.loads(bib_info, parser=parser).entries_dict
 
 
-def do_open(**kwargs):
-    # for pdfs
-    cmd = 'nohup xdg-open {} >/dev/null 2>&1 &'.format('foo.pdf')
-    subprocess.run(cmd, shell=True)
+def do_open(config, **kwargs):
+    key = kwargs['key']
+    if kwargs['bib']:
+        bib_path = os.path.join(config['archive'], key, key + '.bib')
+        editor.edit(bib_path)
+    else:
+        pdf_path = os.path.join(config['archive'], key, key + '.pdf')
+        cmd = 'nohup xdg-open {} >/dev/null 2>&1 &'.format(pdf_path)
+        subprocess.run(cmd, shell=True)
 
-    # for bibs use python-editor package
 
-
-def do_ln(**kwargs):
+def do_ln(config, **kwargs):
     doc = kwargs['document']
     cwd = os.getcwd()
-    src = os.path.join(ARCHIVE_ROOT, doc)
+    src = os.path.join(config['archive'], doc)
     dest = os.path.join(cwd, doc)
     os.symlink(src, dest)
 
 
-def do_grep(**kwargs):
+def do_grep(config, **kwargs):
     ''' Search for a regex in the library. '''
 
     # Arguments
@@ -84,23 +90,23 @@ def do_grep(**kwargs):
     # Options
     bib = kwargs['bib']
     text = kwargs['text']
-    ignore_case = kwargs['ignore_case']
+    case_sensitive = kwargs['case_sensitive']
     oneline = kwargs['oneline']
 
     search_either = bib or text
     search_bib = bib or not search_either
     search_text = text or not search_either
 
-    if ignore_case:
-        regex = re.compile(regex, re.IGNORECASE)
-    else:
+    if case_sensitive:
         regex = re.compile(regex)
+    else:
+        regex = re.compile(regex, re.IGNORECASE)
 
     def repl(match):
         return yellow(match.group(0))
 
     if search_bib:
-        bib_dict = load_bib_dict()
+        bib_dict = load_bib_dict(config['archive'])
         output = []
         for key, info in bib_dict.items():
             count = 0
@@ -131,11 +137,13 @@ def do_grep(**kwargs):
                     file_output.append('\n'.join(detail))
                 output.append('\n'.join(file_output))
 
+        if len(output) == 0:
+            return
+
         if oneline:
             print('\n'.join(output))
         else:
             print('\n\n'.join(output))
-
 
 
 def entry_html(key, data):
@@ -150,7 +158,7 @@ def entry_html(key, data):
     return '<div>{}{}{}{}</div>'.format(title, links, year, author)
 
 
-def do_index(**kwargs):
+def do_index(config, **kwargs):
     # Create an index file with links and information for easy browsing.
     bib_dict = load_bib_dict()
     index_entries = []
@@ -161,7 +169,7 @@ def do_index(**kwargs):
         index_file.write(index_html)
 
 
-def do_compile(**kwargs):
+def do_compile(config, **kwargs):
     ''' Compile a single bibtex file and/or a single directory of PDFs. '''
     if kwargs['bib']:
         with open('bibtex.bib', 'w') as bib_file:
@@ -171,14 +179,14 @@ def do_compile(**kwargs):
     # TODO parse compiled bib file to get information about PDFs in an HTML file
     if kwargs['text']:
         os.mkdir('text')
-        pdf_list = glob.glob(ARCHIVE_ROOT + '/**/*.pdf')
+        pdf_list = glob.glob(config['archive'] + '/**/*.pdf')
         for pdf_path in pdf_list:
             shutil.copy(pdf_path, 'text')
 
         print('Copied PDFs to text/.')
 
 
-def do_add(**kwargs):
+def do_add(config, **kwargs):
     ''' Add a PDF and associated bibtex file to the archive. '''
     pdf_fn = kwargs['pdf']
     bib_fn = kwargs['bibtex']
@@ -194,7 +202,7 @@ def do_add(**kwargs):
 
     key = keys[0]
 
-    archive_path = get_archive_path(key)
+    archive_path = get_archive_path(config['archive'], key)
     if os.path.exists(archive_path):
         print('Archive {} already exists! Aborting.'.format(key))
         return 1
@@ -214,11 +222,7 @@ def do_add(**kwargs):
     return 0
 
 
-def main():
-    if len(sys.argv) <= 1:
-        print('Usage: lib command [opts] [args]. Try --help.')
-        return 1
-
+def parse_args():
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(help='Command.')
 
@@ -237,8 +241,8 @@ def main():
                              help='Search document text.')
     grep_parser.add_argument('-o', '--oneline', action='store_true',
                              help='Only output filename and match count.')
-    grep_parser.add_argument('-i', '--ignore-case', action='store_true',
-                             help='Case insensitive search.')
+    grep_parser.add_argument('-c', '--case-sensitive', action='store_true',
+                             help='Case sensitive search.')
     grep_parser.set_defaults(func=do_grep)
 
     add_parser = subparsers.add_parser('add')
@@ -247,6 +251,12 @@ def main():
     add_parser.add_argument('-d', '--delete', action='store_true',
                             help='Delete files after archiving.')
     add_parser.set_defaults(func=do_add)
+
+    add_parser = subparsers.add_parser('open')
+    add_parser.add_argument('key', help='Key for document to open.')
+    add_parser.add_argument('-b', '--bib', '--bibtex', action='store_true',
+                            help='Compile bibtex files.')
+    add_parser.set_defaults(func=do_open)
 
     compile_parser = subparsers.add_parser('compile')
     compile_parser.add_argument('-b', '--bib', '--bibtex', action='store_true',
@@ -260,7 +270,34 @@ def main():
     args = parser.parse_args()
     args = vars(args)
     func = args.pop('func')
-    return func(**args)
+    return args, func
+
+
+def load_config(path):
+    with open(path) as f:
+        config = yaml.load(f)
+    config['library'] = os.path.expanduser(config['library'])
+    config['archive'] = os.path.join(config['library'], 'archive')
+    config['shelves'] = os.path.join(config['library'], 'shelves')
+    # TODO check if directories exist
+    return config
+
+
+def main():
+    if len(sys.argv) <= 1:
+        print('Usage: lib command [opts] [args]. Try --help.')
+        return 1
+
+    config = load_config(CONFIG_PATH)
+
+    # TODO obviously this must be dealt with...
+    if sys.argv[1] == 'where':
+        print(config['library'])
+        return 0
+
+    args, func = parse_args()
+    func(config, **args)
+
 
 
 if __name__ == '__main__':

@@ -5,8 +5,9 @@ zstyle ':completion:*:*:lib:*:*' verbose no
 
 # Open subcommand.
 local -a subcmd_open
-_regex_words open "Open a file" $(lib list)
+_regex_words open "Open a file" $(ls $(lib where)/archive)
 subcmd_open=("$reply[@]")
+
 
 # Grep subcommand.
 # TODO
