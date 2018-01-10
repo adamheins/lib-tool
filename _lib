@@ -3,34 +3,37 @@
 # We don't want to show the descriptions.
 zstyle ':completion:*:*:lib:*:*' verbose no
 
-# # Open subcommand.
-# local -a subcmd_open
-# _regex_words open "Open a file" $(ls $(lib where)/archive)
-# subcmd_open=("$reply[@]")
-#
-# # Add subcommand.
-# local -a subcmd_add
-# _regex_words add "Add a document."
-#
-# # Commands.
-# local -a cmds
-# _regex_words cmd 'Command' 'open: :$subcmd_open' 'grep:grep' 'ln:ln' 'add:add:$subcmd_add'
-# cmds=("$reply[@]")
-#
-# _regex_arguments _lib /$'[^\0]##\0'/ "${cmds[@]}"
-# _lib "$@"
-_cmds() {
-  local subcmds=('open:open' 'add:add')
+
+# Get the path to the library.
+local libpath=$(lib where)
+
+
+# Completion for top-level commands.
+_lib_cmds() {
+  local subcmds=('open:open' 'add:add' 'grep:grep' 'ln:ln' 'index:index' \
+                 'compile:compile' 'where:where')
   _describe 'command' subcmds
 }
 
-_arguments -C '1: :_cmds' ':arg1:->arg1' ':arg2:->arg2' '*::args:->args'
 
+_lib_open() {
+  # Complete files found in the archive.
+  # -/ only displays directories
+  # -S supressed the trailing /
+  _path_files -W $libpath/archive -/ -S ''
+}
+
+
+# We require an initial command, potentially followed by some arguments.
+_arguments -C '1: :_lib_cmds' ':arg1:->arg1' ':arg2:->arg2' '*::args:->args'
+
+
+# Do completion for individual commands.
 case $state in
   (arg1)
     case $line[1] in
-      (open)
-        _path_files -W $(lib where)/archive -/
+      (open|ln)
+        _lib_open
         ;;
       (add)
         _files -g "*.pdf"
@@ -39,6 +42,13 @@ case $state in
     ;;
   (arg2)
     case $line[1] in
+      (open)
+        case $line[2] in
+          (-b|--bib|--bibtex)
+            _lib_open
+            ;;
+        esac
+        ;;
       (add)
         _files -g "*.bib"
         ;;
