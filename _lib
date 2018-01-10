@@ -18,42 +18,30 @@ _lib_cmds() {
 
 
 _lib_open() {
-  # Complete files found in the archive.
-  # -/ only displays directories
-  # -S supressed the trailing /
   local paths=($archivepath $shelvespath)
-  _path_files -W paths -/
+  _arguments '-b[open bibtex]' \
+             '1: :_path_files -W paths -/'
+}
+
+
+_lib_add() {
+  _arguments '-d' '--delete' \
+             '1: :_files -g "*.pdf"' \
+             '2: :_files -g "*.bib"'
+
 }
 
 
 # We require an initial command, potentially followed by some arguments.
-_arguments -C '1: :_lib_cmds' ':arg1:->arg1' ':arg2:->arg2' '*::args:->args'
+_arguments -C '1: :_lib_cmds' '*::args:->args'
 
 
 # Do completion for individual commands.
 case $state in
-  (arg1)
+  (args)
     case $line[1] in
-      (open|ln)
-        _lib_open
-        ;;
-      (add)
-        _files -g "*.pdf"
-        ;;
-    esac
-    ;;
-  (arg2)
-    case $line[1] in
-      (open)
-        case $line[2] in
-          (-b|--bib|--bibtex)
-            _lib_open
-            ;;
-        esac
-        ;;
-      (add)
-        _files -g "*.bib"
-        ;;
+      (open|ln) _lib_open ;;
+      (add)     _lib_add  ;;
     esac
     ;;
 esac
