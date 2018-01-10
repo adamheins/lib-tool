@@ -5,7 +5,8 @@ zstyle ':completion:*:*:lib:*:*' verbose no
 
 
 # Get the path to the library.
-local libpath=$(lib where)
+local archivepath=$(lib where -a)
+local shelvespath=$(lib where -s)
 
 
 # Completion for top-level commands.
@@ -20,7 +21,8 @@ _lib_open() {
   # Complete files found in the archive.
   # -/ only displays directories
   # -S supressed the trailing /
-  _path_files -W $libpath/archive -/ -S ''
+  local paths=($archivepath $shelvespath)
+  _path_files -W paths -/
 }
 
 

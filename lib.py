@@ -65,6 +65,9 @@ def do_open(config, **kwargs):
     if key[-1] == '/':
         key = key[:-1]
 
+    # If a nested path is given, we just want the last piece.
+    key = key.split(os.path.sep)[-1]
+
     if kwargs['bib']:
         bib_path = os.path.join(config['archive'], key, key + '.bib')
         editor.edit(bib_path)
@@ -75,6 +78,7 @@ def do_open(config, **kwargs):
 
 
 def do_ln(config, **kwargs):
+    # TODO should allow an optional additional arg to rename the symlink
     doc = kwargs['document']
     cwd = os.getcwd()
     src = os.path.join(config['archive'], doc)
