@@ -10,22 +10,15 @@ import sys
 
 import bibtexparser
 import bibtexparser.customization as bibcust
-import colorama
 import editor
 import yaml
+
+from liblib import style, confutil
 
 
 CONFIG_FILE_NAME = '.libconf.yaml'
 CONFIG_SEARCH_DIRS = [os.path.dirname(os.path.realpath(__file__)), os.getcwd(),
                       os.path.expanduser('~')]
-
-
-def yellow(s):
-    return colorama.Fore.YELLOW + s + colorama.Fore.RESET
-
-
-def bold(s):
-    return colorama.Style.BRIGHT + s + colorama.Style.RESET_ALL
 
 
 def compile_bib_info(archive_root):
@@ -58,15 +51,18 @@ def load_bib_dict(archive_path, extra_cust=None):
     return bibtexparser.loads(bib_info, parser=parser).entries_dict
 
 
-def do_open(config, **kwargs):
-    key = kwargs['key']
-
+def parse_key(key):
     # When completing, the user may accidentally include a trailing slash.
     if key[-1] == '/':
         key = key[:-1]
 
     # If a nested path is given, we just want the last piece.
-    key = key.split(os.path.sep)[-1]
+    return key.split(os.path.sep)[-1]
+
+
+def do_open(config, **kwargs):
+    ''' Open a document for viewing. '''
+    key = parse_key(kwargs['key'])
 
     if kwargs['bib']:
         bib_path = os.path.join(config['archive'], key, key + '.bib')
@@ -77,12 +73,20 @@ def do_open(config, **kwargs):
         subprocess.run(cmd, shell=True)
 
 
-def do_ln(config, **kwargs):
-    # TODO should allow an optional additional arg to rename the symlink
-    doc = kwargs['document']
-    cwd = os.getcwd()
-    src = os.path.join(config['archive'], doc)
-    dest = os.path.join(cwd, doc)
+def do_link(config, **kwargs):
+    ''' Create a symlink to the document in the archive. '''
+    key = parse_key(kwargs['key'])
+
+    src = os.path.join(config['archive'], key)
+
+    # The user may specify an (optional) new name, which could be an absolute
+    # or relative path.
+    dest_name = kwargs['name'] if kwargs['name'] is not None else key
+    if os.path.isabs(dest_name):
+        dest = dest_name
+    else:
+        dest = os.path.join(os.getcwd(), dest_name)
+
     os.symlink(src, dest)
 
 
@@ -108,7 +112,7 @@ def do_grep(config, **kwargs):
         regex = re.compile(regex, re.IGNORECASE)
 
     def repl(match):
-        return yellow(match.group(0))
+        return style.yellow(match.group(0))
 
     if search_bib:
         bib_dict = load_bib_dict(config['archive'])
@@ -135,9 +139,9 @@ def do_grep(config, **kwargs):
             if count > 0:
                 file_output = []
                 if count == 1:
-                    file_output.append('{}: 1 match'.format(bold(key)))
+                    file_output.append('{}: 1 match'.format(style.bold(key)))
                 else:
-                    file_output.append('{}: {} matches'.format(bold(key), count))
+                    file_output.append('{}: {} matches'.format(style.bold(key), count))
                 if not oneline:
                     file_output.append('\n'.join(detail))
                 output.append('\n'.join(file_output))
@@ -233,8 +237,34 @@ def do_where(config, **kwargs):
         print(config['archive'])
     elif kwargs['shelves']:
         print(config['shelves'])
+    elif kwargs['bookmarks']:
+        if os.path.isdir(config['bookmarks']):
+            print(config['bookmarks'])
+        else:
+            return 1
     else:
         print(config['library'])
+    return 0
+
+
+def do_bookmark(config, **kwargs):
+    ''' Bookmark a document. This creates a symlink to the document in the
+        bookmarks directory. '''
+
+    # Create the bookmarks directory if it doesn't already exist.
+    bm_dir = config['bookmarks']
+    if not os.path.isdir(bm_dir):
+        os.mkdir(bm_dir)
+        print('Created bookmarks directory at: {}'.format(bm_dir))
+
+    key = parse_key(kwargs['key'])
+    dest_name = kwargs['name'] if kwargs['name'] is not None else key
+
+    # Create the symlink to the document in the bookmarks directory.
+    src = os.path.join(config['archive'], key)
+    dest = os.path.join(config['bookmarks'], dest_name)
+    os.symlink(src, dest)
+
     return 0
 
 
@@ -242,17 +272,21 @@ def parse_args():
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(help='Command.')
 
-    # Ln parser.
-    ln_parser = subparsers.add_parser('ln')
-    ln_parser.add_argument('document', help='Document to link')
-    ln_parser.set_defaults(func=do_ln)
+    # Link parser.
+    link_parser = subparsers.add_parser(
+            'link',
+            aliases=['ln'],
+            help='Create a symlink to a document in the archive.')
+    link_parser.add_argument('key', help='Key for document to symlink.')
+    link_parser.add_argument('name', nargs='?', help='Name for the link.')
+    link_parser.set_defaults(func=do_link)
 
     # Index parser.
     index_parser = subparsers.add_parser('index')
     index_parser.set_defaults(func=do_index)
 
     # Grep parser.
-    grep_parser = subparsers.add_parser('grep')
+    grep_parser = subparsers.add_parser('grep', aliases=['search'])
     grep_parser.add_argument('regex', help='Search for the regex')
     grep_parser.add_argument('-b', '--bib', '--bibtex', action='store_true',
                              help='Search bibtex files.')
@@ -265,7 +299,9 @@ def parse_args():
     grep_parser.set_defaults(func=do_grep)
 
     # Add parser.
-    add_parser = subparsers.add_parser('add')
+    add_parser = subparsers.add_parser(
+            'add',
+            help='Add a new document to the library.')
     add_parser.add_argument('pdf', help='PDF file.')
     add_parser.add_argument('bibtex', help='Associated bibtex file.')
     add_parser.add_argument('-d', '--delete', action='store_true',
@@ -273,10 +309,11 @@ def parse_args():
     add_parser.set_defaults(func=do_add)
 
     # Open parser.
-    open_parser = subparsers.add_parser('open')
+    open_parser = subparsers.add_parser('open',
+                                        help='Open a document for viewing.')
     open_parser.add_argument('key', help='Key for document to open.')
     open_parser.add_argument('-b', '--bib', '--bibtex', action='store_true',
-                            help='Open bibtex files.')
+                             help='Open bibtex files.')
     open_parser.set_defaults(func=do_open)
 
     # Compile subcommand.
@@ -293,7 +330,17 @@ def parse_args():
                               help='Print location of archive.')
     where_parser.add_argument('-s', '--shelves', action='store_true',
                               help='Print location of shelves.')
+    where_parser.add_argument('-b', '--bookmarks', action='store_true',
+                              help='Print location of bookmarks.')
     where_parser.set_defaults(func=do_where)
+
+    # Bookmark subcommand.
+    bookmark_parser = subparsers.add_parser('bookmark', aliases=['bm'],
+                                            help='Bookmark a document.')
+    bookmark_parser.add_argument('key', help='Key for document to bookmark.')
+    bookmark_parser.add_argument('name', nargs='?',
+                                 help='Name for the bookmark.')
+    bookmark_parser.set_defaults(func=do_bookmark)
 
     # Every subparser has an associated function that we call here, passing all
     # other options as arguments.
@@ -303,45 +350,13 @@ def parse_args():
     return args, func
 
 
-def find_config(search_dirs, config_name):
-    ''' Find the path to the configuration file. '''
-    for search_dir in search_dirs:
-        path = os.path.join(search_dir, config_name)
-        if os.path.exists(path):
-            return path
-    return None
-
-
-def load_config(search_dirs, config_name):
-    ''' Load the configuration parameters from file. '''
-    path = find_config(search_dirs, config_name)
-    if path is None:
-        print('Error: Could not find config file.')
-        return None
-
-    with open(path) as f:
-        config = yaml.load(f)
-
-    config['library'] = os.path.expanduser(config['library'])
-    config['archive'] = os.path.join(config['library'], 'archive')
-    config['shelves'] = os.path.join(config['library'], 'shelves')
-
-    # Check if each of these directories exist.
-    for key in ['library', 'archive', 'shelves']:
-        if not os.path.isdir(config[key]):
-            print('Error: {} does not exist!'.format(config[key]))
-            return None
-
-    return config
-
-
 def main():
     if len(sys.argv) <= 1:
         print('Usage: lib command [opts] [args]. Try --help.')
         return 1
 
     # Load the config.
-    config = load_config(CONFIG_SEARCH_DIRS, CONFIG_FILE_NAME)
+    config = confutil.load(CONFIG_SEARCH_DIRS, CONFIG_FILE_NAME)
     if config is None:
         return 1
 

@@ -28,7 +28,6 @@ _lib_add() {
   _arguments '-d' '--delete' \
              '1: :_files -g "*.pdf"' \
              '2: :_files -g "*.bib"'
-
 }
 
 
