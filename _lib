@@ -11,9 +11,15 @@ local shelvespath=$(lib where -s)
 
 # Completion for top-level commands.
 _lib_cmds() {
-  local subcmds=('open:open' 'add:add' 'grep:grep' 'ln:ln' 'index:index' \
-                 'compile:compile' 'where:where')
+  local subcmds=('open:open' 'add:add' 'grep:grep' 'link:link' 'index:index' \
+                 'compile:compile' 'where:where' 'bookmark:bookmark')
   _describe 'command' subcmds
+}
+
+
+_lib_key() {
+  local paths=($archivepath $shelvespath)
+  _arguments '1: :_path_files -W paths -/'
 }
 
 
@@ -26,6 +32,7 @@ _lib_open() {
 
 _lib_add() {
   _arguments '-d' '--delete' \
+             '-b' '--bookmark' \
              '1: :_files -g "*.pdf"' \
              '2: :_files -g "*.bib"'
 }
@@ -39,8 +46,9 @@ _arguments -C '1: :_lib_cmds' '*::args:->args'
 case $state in
   (args)
     case $line[1] in
-      (open|ln) _lib_open ;;
-      (add)     _lib_add  ;;
+      (link|bookmark) _lib_key ;;
+      (open) _lib_open ;;
+      (add)  _lib_add  ;;
     esac
     ;;
 esac

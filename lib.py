@@ -9,46 +9,14 @@ import subprocess
 import sys
 
 import bibtexparser
-import bibtexparser.customization as bibcust
 import editor
-import yaml
 
-from liblib import style, confutil
+from liblib import style, confutil, bibtex
 
 
 CONFIG_FILE_NAME = '.libconf.yaml'
 CONFIG_SEARCH_DIRS = [os.path.dirname(os.path.realpath(__file__)), os.getcwd(),
                       os.path.expanduser('~')]
-
-
-def compile_bib_info(archive_root):
-    bib_list = glob.glob(archive_root + '/**/*.bib')
-    bib_info_list = []
-
-    for bib_path in bib_list:
-        with open(bib_path) as bib_file:
-            bib_info_list.append(bib_file.read().strip())
-
-    return '\n\n'.join(bib_info_list)
-
-
-def load_bib_dict(archive_path, extra_cust=None):
-    def customizations(record):
-        record = bibcust.convert_to_unicode(record)
-
-        # Make authors semicolon-separated rather than and-separated.
-        record['author'] = record['author'].replace(' and', ';')
-
-        # Apply extra customization function is applicable.
-        if extra_cust:
-            record = extra_cust(record)
-        return record
-
-    parser = bibtexparser.bparser.BibTexParser()
-    parser.customization = customizations
-
-    bib_info = compile_bib_info(archive_path)
-    return bibtexparser.loads(bib_info, parser=parser).entries_dict
 
 
 def parse_key(key):
@@ -115,7 +83,7 @@ def do_grep(config, **kwargs):
         return style.yellow(match.group(0))
 
     if search_bib:
-        bib_dict = load_bib_dict(config['archive'])
+        bib_dict = bibtex.load_bib_dict(config['archive'])
         output = []
         for key, info in bib_dict.items():
             count = 0
@@ -169,7 +137,7 @@ def entry_html(key, data):
 
 def do_index(config, **kwargs):
     # Create an index file with links and information for easy browsing.
-    bib_dict = load_bib_dict()
+    bib_dict = bibtex.load_bib_dict()
     index_entries = []
     for key in bib_dict.keys():
         index_entries.append(entry_html(key, bib_dict[key]))
@@ -182,7 +150,7 @@ def do_compile(config, **kwargs):
     ''' Compile a single bibtex file and/or a single directory of PDFs. '''
     if kwargs['bib']:
         with open('bibtex.bib', 'w') as bib_file:
-            bib_file.write(compile_bib_info())
+            bib_file.write(bibtex.compile_bib_info())
         print('Compiled bibtex files to bibtex.bib.')
 
     # TODO parse compiled bib file to get information about PDFs in an HTML file
@@ -197,16 +165,16 @@ def do_compile(config, **kwargs):
 
 def do_add(config, **kwargs):
     ''' Add a PDF and associated bibtex file to the archive. '''
-    pdf_fn = kwargs['pdf']
-    bib_fn = kwargs['bibtex']
+    pdf_file_name = kwargs['pdf']
+    bib_file_name = kwargs['bibtex']
 
-    with open(bib_fn) as bib_file:
+    with open(bib_file_name) as bib_file:
         bib_info = bibtexparser.load(bib_file)
 
     keys = list(bib_info.entries_dict.keys())
     if len(keys) > 1:
         print('It looks like there\'s more than one entry in the bibtex file. '
-            + 'I\'m not sure what to do!')
+              + 'I\'m not sure what to do!')
         return 1
 
     key = keys[0]
@@ -221,11 +189,14 @@ def do_add(config, **kwargs):
 
     os.mkdir(archive_path)
     if kwargs['delete']:
-        shutil.move(pdf_fn, archive_pdf_path)
-        shutil.move(bib_fn, archive_bib_path)
+        shutil.move(pdf_file_name, archive_pdf_path)
+        shutil.move(bib_file_name, archive_bib_path)
     else:
-        shutil.copy(pdf_fn, archive_pdf_path)
-        shutil.copy(bib_fn, archive_bib_path)
+        shutil.copy(pdf_file_name, archive_pdf_path)
+        shutil.copy(bib_file_name, archive_bib_path)
+
+    if kwargs['bookmark']:
+        do_bookmark(config, key=key)
 
     print('Archived to {}.'.format(key))
     return 0
@@ -286,7 +257,8 @@ def parse_args():
     index_parser.set_defaults(func=do_index)
 
     # Grep parser.
-    grep_parser = subparsers.add_parser('grep', aliases=['search'])
+    grep_parser = subparsers.add_parser('grep', aliases=['search'],
+                                        help='Search the library.')
     grep_parser.add_argument('regex', help='Search for the regex')
     grep_parser.add_argument('-b', '--bib', '--bibtex', action='store_true',
                              help='Search bibtex files.')
@@ -299,6 +271,7 @@ def parse_args():
     grep_parser.set_defaults(func=do_grep)
 
     # Add parser.
+    # TODO implement bookmark flag
     add_parser = subparsers.add_parser(
             'add',
             help='Add a new document to the library.')
@@ -306,6 +279,8 @@ def parse_args():
     add_parser.add_argument('bibtex', help='Associated bibtex file.')
     add_parser.add_argument('-d', '--delete', action='store_true',
                             help='Delete files after archiving.')
+    add_parser.add_argument('-b', '--bookmark', action='store_true',
+                            help='Also create a bookmark to this document.')
     add_parser.set_defaults(func=do_add)
 
     # Open parser.
