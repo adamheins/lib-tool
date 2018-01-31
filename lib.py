@@ -20,6 +20,7 @@ CONFIG_SEARCH_DIRS = [os.path.dirname(os.path.realpath(__file__)), os.getcwd(),
 
 
 def parse_key(key):
+    ''' Clean up a user-supplied document key. '''
     # When completing, the user may accidentally include a trailing slash.
     if key[-1] == '/':
         key = key[:-1]
@@ -196,7 +197,7 @@ def do_add(config, **kwargs):
         shutil.copy(bib_file_name, archive_bib_path)
 
     if kwargs['bookmark']:
-        do_bookmark(config, key=key)
+        do_bookmark(config, key=key, name=None)
 
     print('Archived to {}.'.format(key))
     return 0
@@ -300,7 +301,8 @@ def parse_args():
     compile_parser.set_defaults(func=do_compile)
 
     # Where subcommand.
-    where_parser = subparsers.add_parser('where')
+    where_parser = subparsers.add_parser('where',
+                                         help='Print library directories.')
     where_parser.add_argument('-a', '--archive', action='store_true',
                               help='Print location of archive.')
     where_parser.add_argument('-s', '--shelves', action='store_true',
