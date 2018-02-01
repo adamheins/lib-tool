@@ -124,27 +124,54 @@ def do_grep(config, **kwargs):
             print('\n\n'.join(output))
 
 
-def entry_html(key, data):
-    title = '<h2>{}</h2>'.format(data['title'])
-    year = '<p>{}</p>'.format(data['year'])
-    author = '<p>{}</p>'.format(data['author'])
+ENTRY_TEMPLATE = '''
+<div class="post">
+    <h2><a href={path}>{title}</a></h2>
+    <div class="date">{year}</div>
+    <p class="description">{authors}</p>
+</div>'''
 
-    text_link = '<a href="{}">(text)</a>'.format('')
-    bib_link = '<a href="{}">(bib)</a>'.format('')
-    links = '<div>{}{}</div>'.format(text_link, bib_link)
 
-    return '<div>{}{}{}{}</div>'.format(title, links, year, author)
+ARCHIVE_TEMPLATE = '''
+<html>
+    <head>
+        <title>Archive</title>
+        <link rel="stylesheet" href="https://static.adamheins.com/css/layout.css"/>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,300,300italic"/>
+    </head>
+    <body>
+        <div class="container">
+            <div class="content">
+                <section>
+                    <h1>Archive</h1>
+                </section>
+                <section>{entries}</section>
+            </div>
+        </div>
+    </body>
+</html>
+'''
+
+
+def entry_html(key, data, archive_path):
+    text_path = os.path.join(archive_path, key, key + '.pdf')
+    entry = ENTRY_TEMPLATE.format(path=text_path, title=data['title'],
+                                  year=data['year'], authors=data['author'])
+    return entry
 
 
 def do_index(config, **kwargs):
-    # Create an index file with links and information for easy browsing.
-    bib_dict = bibtex.load_bib_dict()
-    index_entries = []
-    for key in bib_dict.keys():
-        index_entries.append(entry_html(key, bib_dict[key]))
-    index_html = '<html><body>' + ''.join(index_entries) + '</body></html>'
+    ''' Create an index file with links and information for easy browsing. '''
+    bib_dict = bibtex.load_bib_dict(config['archive'])
+    entries = sorted(bib_dict.items(), key=lambda item: item[1]['year'],
+                     reverse=True)
+    entries = map(lambda item: entry_html(item[0], item[1], config['archive']),
+                  entries)
+
+    html = ARCHIVE_TEMPLATE.format(entries=''.join(entries))
+
     with open('index.html', 'w') as index_file:
-        index_file.write(index_html)
+        index_file.write(html)
 
 
 def do_compile(config, **kwargs):
@@ -154,7 +181,6 @@ def do_compile(config, **kwargs):
             bib_file.write(bibtex.compile_bib_info())
         print('Compiled bibtex files to bibtex.bib.')
 
-    # TODO parse compiled bib file to get information about PDFs in an HTML file
     if kwargs['text']:
         os.mkdir('text')
         pdf_list = glob.glob(config['archive'] + '/**/*.pdf')

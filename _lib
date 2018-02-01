@@ -11,18 +11,21 @@ local shelvespath=$(lib where -s)
 
 # Completion for top-level commands.
 _lib_cmds() {
-  local subcmds=('open:open' 'add:add' 'grep:grep' 'link:link' 'index:index' \
-                 'compile:compile' 'where:where' 'bookmark:bookmark')
+  local subcmds=('open:open' 'add:add' 'grep:grep' 'search:search' \
+                 'link:link' 'ln:ln' 'index:index' 'compile:compile' \
+                 'where:where' 'bookmark:bookmark' 'bm:bm')
   _describe 'command' subcmds
 }
 
 
+# Simply complete a key in the archive or shelves.
 _lib_key() {
   local paths=($archivepath $shelvespath)
   _arguments '1: :_path_files -W paths -/'
 }
 
 
+# Completion for the open subcommand.
 _lib_open() {
   local paths=($archivepath $shelvespath)
   _arguments '-b[open bibtex]' \
@@ -30,11 +33,13 @@ _lib_open() {
 }
 
 
+# Completion for the add subcommand.
 _lib_add() {
-  _arguments '-d' '--delete' \
-             '-b' '--bookmark' \
-             '1: :_files -g "*.pdf"' \
-             '2: :_files -g "*.bib"'
+  # The -w allows stacking of single-letter arguments.
+  _arguments -w '-d' '--delete' \
+                '-b' '--bookmark' \
+                '1: :_files -g "*.pdf"' \
+                '2: :_files -g "*.bib"'
 }
 
 
@@ -46,7 +51,7 @@ _arguments -C '1: :_lib_cmds' '*::args:->args'
 case $state in
   (args)
     case $line[1] in
-      (link|bookmark) _lib_key ;;
+      (link|ln|bookmark) _lib_key ;;
       (open) _lib_open ;;
       (add)  _lib_add  ;;
     esac
