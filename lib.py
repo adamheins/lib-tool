@@ -225,8 +225,11 @@ def do_add(config, **kwargs):
     if kwargs['bookmark']:
         do_bookmark(config, key=key, name=None)
 
-    print('Archived to {}.'.format(key))
-    return 0
+    if kwargs['bookmark']:
+        msg = 'Archived to {} and bookmarked.'.format(key)
+    else:
+        msg = 'Archived to {}.'.format(key)
+    print(msg)
 
 
 def do_where(config, **kwargs):

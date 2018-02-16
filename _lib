@@ -13,8 +13,14 @@ local shelvespath=$(lib where -s)
 _lib_cmds() {
   local subcmds=('open:open' 'add:add' 'grep:grep' 'search:search' \
                  'link:link' 'ln:ln' 'index:index' 'compile:compile' \
-                 'where:where' 'bookmark:bookmark' 'bm:bm')
+                 'where:where' 'bookmark:bookmark' 'bm:bm' 'cd:cd')
   _describe 'command' subcmds
+}
+
+
+_lib_where() {
+  _arguments '-a' '--archive' \
+             '-s' '--shelves'
 }
 
 
@@ -54,6 +60,7 @@ case $state in
       (link|ln|bookmark) _lib_key ;;
       (open) _lib_open ;;
       (add)  _lib_add  ;;
+      (where|cd) _lib_where ;;
     esac
     ;;
 esac
