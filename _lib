@@ -41,8 +41,8 @@ _lib_open() {
 
 # Completion for the add subcommand.
 _lib_add() {
-  # The -w allows stacking of single-letter arguments.
-  _arguments -w '-d' '--delete' \
+  # The -s allows stacking of single-letter arguments.
+  _arguments -s '-d' '--delete' \
                 '-b' '--bookmark' \
                 '1: :_files -g "*.pdf"' \
                 '2: :_files -g "*.bib"'
