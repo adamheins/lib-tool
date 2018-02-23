@@ -10,6 +10,7 @@ import sys
 
 import bibtexparser
 import editor
+import textract
 
 from liblib import style, confutil, bibtex
 
@@ -42,21 +43,66 @@ def do_open(config, **kwargs):
         subprocess.run(cmd, shell=True)
 
 
-def do_link(config, **kwargs):
-    ''' Create a symlink to the document in the archive. '''
-    key = parse_key(kwargs['key'])
+def key_in_archive(config, key):
+    ''' Check if a key in the archive. '''
+    path = os.path.join(config['archive'], key)
+    return os.path.isdir(path)
 
+
+def fix_links(config, directory):
+    ''' Fix all broken links in the directory. '''
+    files = os.listdir(directory)
+    for link in filter(os.path.islink, files):
+        fix_link(config, link)
+    return 0
+
+
+def fix_link(config, link):
+    ''' Fix a link that has broken due to the library being moved. '''
+    if not os.path.islink(link):
+        print('{} is not a symlink.'.format(link))
+        return 1
+
+    # TODO I'd like to be able to pass a whole directory to fix, too
+
+    path = os.readlink(link)
+    base = os.path.basename(path)
+
+    if not key_in_archive(config, base):
+        print('{} does not point to a document in the archive.'.format(link))
+        return 1
+
+    # Recreate the link, pointing to the correct location.
+    os.remove(link)
+    return make_link(config, base, link)
+
+
+def make_link(config, key, name):
+    ''' Create a symlink into the archive. '''
     src = os.path.join(config['archive'], key)
 
     # The user may specify an (optional) new name, which could be an absolute
     # or relative path.
-    dest_name = kwargs['name'] if kwargs['name'] is not None else key
+    dest_name = name if name is not None else key
     if os.path.isabs(dest_name):
         dest = dest_name
     else:
         dest = os.path.join(os.getcwd(), dest_name)
 
     os.symlink(src, dest)
+    return 0
+
+
+def do_link(config, **kwargs):
+    ''' Create a symlink to the document in the archive. '''
+    key = parse_key(kwargs['key'])
+
+    if kwargs['fix']:
+        if os.path.isdir(key):
+            return fix_links(config, key)
+        return fix_link(config, key)
+    else:
+        return make_link(config, key, kwargs['name'])
 
 
 def do_grep(config, **kwargs):
@@ -278,6 +324,8 @@ def parse_args():
             'link',
             aliases=['ln'],
             help='Create a symlink to a document in the archive.')
+    link_parser.add_argument('-f', '--fix', action='store_true',
+                             help='Fix a broken symlink into the library.')
     link_parser.add_argument('key', help='Key for document to symlink.')
     link_parser.add_argument('name', nargs='?', help='Name for the link.')
     link_parser.set_defaults(func=do_link)

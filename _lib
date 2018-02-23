@@ -49,6 +49,13 @@ _lib_add() {
 }
 
 
+_lib_link() {
+  local paths=($archivepath $shelvespath)
+  _arguments '-f:link:_files' '--fix:link:_files' \
+             '1: :_path_files -W paths -/'
+}
+
+
 # We require an initial command, potentially followed by some arguments.
 _arguments -C '1: :_lib_cmds' '*::args:->args'
 
@@ -57,9 +64,10 @@ _arguments -C '1: :_lib_cmds' '*::args:->args'
 case $state in
   (args)
     case $line[1] in
-      (link|ln|bookmark) _lib_key ;;
-      (open) _lib_open ;;
-      (add)  _lib_add  ;;
+      (link|ln)  _lib_link ;;
+      (bookmark) _lib_key ;;
+      (open)     _lib_open ;;
+      (add)      _lib_add  ;;
       (where|cd) _lib_where ;;
     esac
     ;;
