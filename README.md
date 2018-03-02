@@ -1,5 +1,5 @@
-# lib
-Idea for a CLI-based document organization scheme.
+# librarian
+A simple CLI-based document organization tool.
 
 Documents should be organized in the following manner:
 ```
