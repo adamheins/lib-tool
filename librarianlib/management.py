@@ -65,6 +65,10 @@ class Archive(object):
     def pdf_path(self, key):
         return os.path.join(self.key_path(key), key + '.pdf')
 
+    def pdf_to_key(self, pdf):
+        base = os.path.basename(pdf)
+        return base.split('.')[0]
+
 
 class LibraryManager(object):
     def __init__(self, config_file_path):

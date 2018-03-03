@@ -9,15 +9,23 @@ import sys
 
 import bibtexparser
 import editor
-import textract
 
-from librarianlib import style, management, index, links
+from librarianlib import management, index, links, search
 from librarianlib.exceptions import LibraryException
 
 
 CONFIG_FILE_NAME = '.libconf.yaml'
 CONFIG_SEARCH_DIRS = [os.path.dirname(os.path.realpath(__file__)), os.getcwd(),
                       os.path.expanduser('~')]
+
+
+# TODO this could be a nice way to remove some of the cruft
+class LibraryInterface(object):
+    def __init__(self, manager):
+        self.manager = manager
+
+    def open(**kwargs):
+        pass
 
 
 def do_open(manager, **kwargs):
@@ -45,66 +53,27 @@ def do_link(manager, **kwargs):
 def do_grep(manager, **kwargs):
     ''' Search for a regex in the library. '''
 
-    # Arguments
+    # Construct search regex.
     regex = kwargs['regex']
 
-    # Options
-    bib = kwargs['bib']
-    text = kwargs['text']
-    case_sensitive = kwargs['case_sensitive']
-    oneline = kwargs['oneline']
-
-    search_either = bib or text
-    search_bib = bib or not search_either
-    search_text = text or not search_either
-
-    if case_sensitive:
+    if kwargs['case_sensitive']:
         regex = re.compile(regex)
     else:
         regex = re.compile(regex, re.IGNORECASE)
 
-    def repl(match):
-        return style.yellow(match.group(0))
+    # Options
+    # If neither --bib nor --text are specified, search both. Likewise, if both
+    # are specified, also search both. We only don't search one if only the
+    # other is specified.
+    search_bib = kwargs['bib'] or not kwargs['text']
+    search_text = kwargs['text'] or not kwargs['bib']
 
     if search_bib:
-        bib_dict = manager.bibtex_dict()
-        output = []
-        for key, info in bib_dict.items():
-            count = 0
-            detail = []
-            for field, value in info.items():
-                # Skip the ID field; it's already a composition of parts of
-                # other fields.
-                if field == 'ID':
-                    continue
-
-                # Find all the matches.
-                result = regex.findall(value)
-                count += len(result)
-                if len(result) == 0:
-                    continue
-
-                # Highlight the matches.
-                s = regex.sub(repl, value)
-                detail.append('  {}: {}'.format(field, s))
-
-            if count > 0:
-                file_output = []
-                if count == 1:
-                    file_output.append('{}: 1 match'.format(style.bold(key)))
-                else:
-                    file_output.append('{}: {} matches'.format(style.bold(key), count))
-                if not oneline:
-                    file_output.append('\n'.join(detail))
-                output.append('\n'.join(file_output))
-
-        if len(output) == 0:
-            return
-
-        if oneline:
-            print('\n'.join(output))
-        else:
-            print('\n\n'.join(output))
+        bibtex_results = search.search_bibtex(manager, regex, kwargs['oneline'])
+        print(bibtex_results)
+    if search_text:
+        text_results = search.search_text(manager, regex, kwargs['oneline'], verbose=True)
+        print(text_results)
 
 
 def do_index(manager, **kwargs):
