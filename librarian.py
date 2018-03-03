@@ -11,7 +11,7 @@ import bibtexparser
 import editor
 import textract
 
-from librarianlib import style, management, index
+from librarianlib import style, management, index, links
 from librarianlib.exceptions import LibraryException
 
 
@@ -30,40 +30,14 @@ def do_open(manager, **kwargs):
         subprocess.run(cmd, shell=True)
 
 
-def fix_links(manager, directory):
-    ''' Fix all broken links in the directory. '''
-    files = os.listdir(directory)
-    for link in filter(os.path.islink, files):
-        fix_link(manager, link)
-    return 0
-
-
-def fix_link(manager, link):
-    ''' Fix a link that has broken due to the library being moved. '''
-    if not os.path.islink(link):
-        print('{} is not a symlink.'.format(link))
-        return 1
-
-    path = os.readlink(link)
-    base = os.path.basename(path)
-
-    if not manager.archive.has_key(base):
-        print('{} does not point to a document in the archive.'.format(link))
-        return 1
-
-    # Recreate the link, pointing to the correct location.
-    os.remove(link)
-    manager.link(base, link)
-
-
 def do_link(manager, **kwargs):
     ''' Create a symlink to the document in the archive. '''
     key = kwargs['key']
 
     if kwargs['fix']:
         if os.path.isdir(key):
-            return fix_links(manager, key)
-        return fix_link(manager, key)
+            return links.fix_dir(manager, key)
+        return links.fix_one(manager, key)
     else:
         manager.link(key, kwargs['name'])
 
@@ -136,7 +110,7 @@ def do_grep(manager, **kwargs):
 def do_index(manager, **kwargs):
     ''' Create an index file with links and information for easy browsing. '''
     bib_dict = manager.bibtex_dict()
-    html = index.html(bib_dict, manager.paths['archive'])
+    html = index.html(manager, bib_dict)
 
     if os.path.exists('library.html'):
         raise LibraryException('File library.html already exists. Aborting.')

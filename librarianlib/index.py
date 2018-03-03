@@ -30,18 +30,21 @@ ARCHIVE_TEMPLATE = '''
 '''
 
 
-def entry_html(key, data, archive_path):
-    path = os.path.join(archive_path, key, key + '.pdf')
-    return ENTRY_TEMPLATE.format(path=path, title=data['title'],
+def entry_html(data, pdf_path):
+    return ENTRY_TEMPLATE.format(path=pdf_path, title=data['title'],
                                  year=data['year'], authors=data['author'])
 
 
-def html(bib_dict, archive_path):
+def html(manager, bib_dict):
     # Sort the documents by year, with most recent first.
-    entries = sorted(bib_dict.items(), key=lambda item: item[1]['year'],
-                     reverse=True)
+    def entry_year(item):
+        return item[1]['year']
+    entries = sorted(bib_dict.items(), key=entry_year, reverse=True)
 
     # Generate HTML for each entry.
-    entries = map(lambda item: entry_html(item[0], item[1], archive_path), entries)
+    def entry_to_html(item):
+        # item[0] is the bibtex key, item[1] is the bibtex data
+        return entry_html(item[1], manager.archive.pdf_path(item[0]))
+    entries = map(entry_to_html, entries)
 
     return ARCHIVE_TEMPLATE.format(entries=''.join(entries))
