@@ -72,9 +72,11 @@ def count_message(key, count):
 
 
 def search_text(manager, regex, oneline, verbose=False):
+    ''' Search for the regex in the PDF documents. '''
     # We assume that we want to search the whole corpus. For single document
     # searches, open the doc in a PDF viewer.
-    output = []
+    results = []
+
     for pdf in manager.archive.all_pdf_files():
         key = manager.archive.pdf_to_key(pdf)
 
@@ -84,6 +86,8 @@ def search_text(manager, regex, oneline, verbose=False):
         old_hash = read_file_hash(hash_fname)
         current_hash = hash_file(pdf)
 
+        # If the document has changed (as indicated by a different or
+        # non-preexisting hash), we need to extract it's text.
         if current_hash != old_hash:
             write_file_hash(hash_fname, current_hash)
             text = parse_pdf_text(pdf)
@@ -96,8 +100,13 @@ def search_text(manager, regex, oneline, verbose=False):
 
         count = len(regex.findall(text))
         if count > 0:
-            file_output = count_message(key, count)
-            output.append(file_output)
+            results.append({'key': key, 'count': count, 'detail': ''})
+
+    # Sort and parse the results.
+    output = []
+    for result in sorted(results, key=lambda result: result['count']):
+        file_output = count_message(result['key'], result['count'])
+        output.append(file_output)
 
     if len(output) == 0:
         return 'No matches.'
@@ -108,10 +117,10 @@ def search_text(manager, regex, oneline, verbose=False):
 
 
 def search_bibtex(manager, regex, oneline):
-    bib_dict = manager.bibtex_dict()
-    output = []
+    ''' Search for the regex in bibtex file. '''
+    results = []
 
-    for key, info in bib_dict.items():
+    for key, info in manager.bibtex_dict().items():
         count = 0
         detail = []
         for field, value in info.items():
@@ -131,10 +140,15 @@ def search_bibtex(manager, regex, oneline):
             detail.append('  {}: {}'.format(field, s))
 
         if count > 0:
-            file_output = [count_message(key, count)]
-            if not oneline:
-                file_output.append('\n'.join(detail))
-            output.append('\n'.join(file_output))
+            results.append({'key': key, 'count': count, 'detail': detail})
+
+    # Sort and parse the results.
+    output = []
+    for result in sorted(results, key=lambda result: result['count']):
+        file_output = [count_message(result['key'], result['count'])]
+        if not oneline:
+            file_output.append('\n'.join(result['detail']))
+        output.append('\n'.join(file_output))
 
     if len(output) == 0:
         return 'No matches.'
