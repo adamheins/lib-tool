@@ -9,7 +9,7 @@ if [ -h $0 ]; then
 fi
 
 # Path to executable.
-exe="$here/lib.py"
+exe="$here/librarian.py"
 
 # Wrap lib executable to allow for cd functionality.
 lib() {

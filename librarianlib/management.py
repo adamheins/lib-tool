@@ -6,6 +6,8 @@ import yaml
 import bibtexparser
 import bibtexparser.customization as customization
 
+from .exceptions import LibraryException
+
 
 def find_config(search_dirs, config_name):
     ''' Find the path to the configuration file. '''
@@ -14,14 +16,6 @@ def find_config(search_dirs, config_name):
         if os.path.exists(path):
             return path
     return None
-
-
-def init(search_dirs, config_name):
-    config_file_path = find_config(search_dirs, config_name)
-    if config_file_path is None:
-        raise LibraryException('Could not find config file.')
-
-    return LibraryManager(config_file_path)
 
 
 def parse_key(key):
@@ -34,12 +28,18 @@ def parse_key(key):
     return key.split(os.path.sep)[-1]
 
 
-class LibraryException(Exception):
-    def __init__(self, message):
-        self.message = message
+def init(search_dirs, config_name):
+    ''' Initialize a LibraryManager. '''
+    config_file_path = find_config(search_dirs, config_name)
+    if config_file_path is None:
+        raise LibraryException('Could not find config file.')
+
+    return LibraryManager(config_file_path)
 
 
 class Archive(object):
+    ''' Provides convenience functions to interact with the library's archive.
+        '''
     def __init__(self, path):
         self.path = path
 

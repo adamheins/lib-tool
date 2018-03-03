@@ -11,7 +11,8 @@ import bibtexparser
 import editor
 import textract
 
-from liblib import style, management
+from librarianlib import style, management
+from librarianlib.exceptions import LibraryException
 
 
 CONFIG_FILE_NAME = '.libconf.yaml'
@@ -347,7 +348,7 @@ def main():
     # Load the LibraryManager.
     try:
         manager = management.init(CONFIG_SEARCH_DIRS, CONFIG_FILE_NAME)
-    except management.LibraryException as e:
+    except LibraryException as e:
         print(e.message)
         return 1
 
@@ -355,7 +356,7 @@ def main():
 
     try:
         func(manager, **args)
-    except management.LibraryException as e:
+    except LibraryException as e:
         print(e.message)
         return 1
     return 0
