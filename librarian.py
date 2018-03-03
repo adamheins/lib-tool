@@ -11,7 +11,7 @@ import bibtexparser
 import editor
 import textract
 
-from librarianlib import style, management
+from librarianlib import style, management, index
 from librarianlib.exceptions import LibraryException
 
 
@@ -133,52 +133,17 @@ def do_grep(manager, **kwargs):
             print('\n\n'.join(output))
 
 
-ENTRY_TEMPLATE = '''
-<div class="post">
-    <h2><a href={path}>{title}</a></h2>
-    <div class="date">{year}</div>
-    <p class="description">{authors}</p>
-</div>'''
-
-
-ARCHIVE_TEMPLATE = '''
-<html>
-    <head>
-        <title>Archive</title>
-        <link rel="stylesheet" href="https://static.adamheins.com/css/layout.css"/>
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,300,300italic"/>
-    </head>
-    <body>
-        <div class="container">
-            <div class="content">
-                <section>
-                    <h1>Archive</h1>
-                </section>
-                <section>{entries}</section>
-            </div>
-        </div>
-    </body>
-</html>
-'''
-
-
-def entry_html(key, data, pdf_path):
-    return ENTRY_TEMPLATE.format(path=pdf_path, title=data['title'],
-                                 year=data['year'], authors=data['author'])
-
-
 def do_index(manager, **kwargs):
     ''' Create an index file with links and information for easy browsing. '''
     bib_dict = manager.bibtex_dict()
-    entries = sorted(bib_dict.items(), key=lambda item: item[1]['year'],
-                     reverse=True)
-    entries = map(lambda item: entry_html(item[0], item[1],
-                                          manager.paths['archive']), entries)
+    html = index.html(bib_dict, manager.paths['archive'])
 
-    html = ARCHIVE_TEMPLATE.format(entries=''.join(entries))
+    if os.path.exists('library.html'):
+        raise LibraryException('File library.html already exists. Aborting.')
 
-    with open('index.html', 'w') as index_file:
+    with open('library.html', 'w') as index_file:
         index_file.write(html)
+    print('Wrote index to library.html.')
 
 
 def do_compile(manager, **kwargs):
