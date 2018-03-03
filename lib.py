@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import argparse
-import glob
 import os
 import re
 import shutil
@@ -12,7 +11,7 @@ import bibtexparser
 import editor
 import textract
 
-from liblib import style, confutil, bibtex
+from liblib import style, management
 
 
 CONFIG_FILE_NAME = '.libconf.yaml'
@@ -20,92 +19,55 @@ CONFIG_SEARCH_DIRS = [os.path.dirname(os.path.realpath(__file__)), os.getcwd(),
                       os.path.expanduser('~')]
 
 
-def parse_key(key):
-    ''' Clean up a user-supplied document key. '''
-    # When completing, the user may accidentally include a trailing slash.
-    if key[-1] == '/':
-        key = key[:-1]
-
-    # If a nested path is given, we just want the last piece.
-    return key.split(os.path.sep)[-1]
-
-
-def do_open(config, **kwargs):
+def do_open(manager, **kwargs):
     ''' Open a document for viewing. '''
-    key = parse_key(kwargs['key'])
-
     if kwargs['bib']:
-        bib_path = os.path.join(config['archive'], key, key + '.bib')
-        editor.edit(bib_path)
+        editor.edit(manager.archive.bib_path(kwargs['key']))
     else:
-        pdf_path = os.path.join(config['archive'], key, key + '.pdf')
+        pdf_path = manager.archive.pdf_path(kwargs['key'])
         cmd = 'nohup xdg-open {} >/dev/null 2>&1 &'.format(pdf_path)
         subprocess.run(cmd, shell=True)
 
 
-def key_in_archive(config, key):
-    ''' Check if a key in the archive. '''
-    path = os.path.join(config['archive'], key)
-    return os.path.isdir(path)
-
-
-def fix_links(config, directory):
+def fix_links(manager, directory):
     ''' Fix all broken links in the directory. '''
     files = os.listdir(directory)
     for link in filter(os.path.islink, files):
-        fix_link(config, link)
+        fix_link(manager, link)
     return 0
 
 
-def fix_link(config, link):
+def fix_link(manager, link):
     ''' Fix a link that has broken due to the library being moved. '''
     if not os.path.islink(link):
         print('{} is not a symlink.'.format(link))
         return 1
 
-    # TODO I'd like to be able to pass a whole directory to fix, too
-
     path = os.readlink(link)
     base = os.path.basename(path)
 
-    if not key_in_archive(config, base):
+    if not manager.archive.has_key(base):
         print('{} does not point to a document in the archive.'.format(link))
         return 1
 
     # Recreate the link, pointing to the correct location.
     os.remove(link)
-    return make_link(config, base, link)
+    manager.link(base, link)
 
 
-def make_link(config, key, name):
-    ''' Create a symlink into the archive. '''
-    src = os.path.join(config['archive'], key)
-
-    # The user may specify an (optional) new name, which could be an absolute
-    # or relative path.
-    dest_name = name if name is not None else key
-    if os.path.isabs(dest_name):
-        dest = dest_name
-    else:
-        dest = os.path.join(os.getcwd(), dest_name)
-
-    os.symlink(src, dest)
-    return 0
-
-
-def do_link(config, **kwargs):
+def do_link(manager, **kwargs):
     ''' Create a symlink to the document in the archive. '''
-    key = parse_key(kwargs['key'])
+    key = kwargs['key']
 
     if kwargs['fix']:
         if os.path.isdir(key):
-            return fix_links(config, key)
-        return fix_link(config, key)
+            return fix_links(manager, key)
+        return fix_link(manager, key)
     else:
-        return make_link(config, key, kwargs['name'])
+        manager.link(key, kwargs['name'])
 
 
-def do_grep(config, **kwargs):
+def do_grep(manager, **kwargs):
     ''' Search for a regex in the library. '''
 
     # Arguments
@@ -130,7 +92,7 @@ def do_grep(config, **kwargs):
         return style.yellow(match.group(0))
 
     if search_bib:
-        bib_dict = bibtex.load_bib_dict(config['archive'])
+        bib_dict = manager.bibtex_dict()
         output = []
         for key, info in bib_dict.items():
             count = 0
@@ -199,20 +161,18 @@ ARCHIVE_TEMPLATE = '''
 '''
 
 
-def entry_html(key, data, archive_path):
-    text_path = os.path.join(archive_path, key, key + '.pdf')
-    entry = ENTRY_TEMPLATE.format(path=text_path, title=data['title'],
-                                  year=data['year'], authors=data['author'])
-    return entry
+def entry_html(key, data, pdf_path):
+    return ENTRY_TEMPLATE.format(path=pdf_path, title=data['title'],
+                                 year=data['year'], authors=data['author'])
 
 
-def do_index(config, **kwargs):
+def do_index(manager, **kwargs):
     ''' Create an index file with links and information for easy browsing. '''
-    bib_dict = bibtex.load_bib_dict(config['archive'])
+    bib_dict = manager.bibtex_dict()
     entries = sorted(bib_dict.items(), key=lambda item: item[1]['year'],
                      reverse=True)
-    entries = map(lambda item: entry_html(item[0], item[1], config['archive']),
-                  entries)
+    entries = map(lambda item: entry_html(item[0], item[1],
+                                          manager.paths['archive']), entries)
 
     html = ARCHIVE_TEMPLATE.format(entries=''.join(entries))
 
@@ -220,23 +180,22 @@ def do_index(config, **kwargs):
         index_file.write(html)
 
 
-def do_compile(config, **kwargs):
+def do_compile(manager, **kwargs):
     ''' Compile a single bibtex file and/or a single directory of PDFs. '''
     if kwargs['bib']:
         with open('bibtex.bib', 'w') as bib_file:
-            bib_file.write(bibtex.compile_bib_info())
+            bib_file.write(manager.bibtex_string())
         print('Compiled bibtex files to bibtex.bib.')
 
     if kwargs['text']:
         os.mkdir('text')
-        pdf_list = glob.glob(config['archive'] + '/**/*.pdf')
-        for pdf_path in pdf_list:
+        for pdf_path in manager.archive.all_pdf_files():
             shutil.copy(pdf_path, 'text')
 
         print('Copied PDFs to text/.')
 
 
-def do_add(config, **kwargs):
+def do_add(manager, **kwargs):
     ''' Add a PDF and associated bibtex file to the archive. '''
     pdf_file_name = kwargs['pdf']
     bib_file_name = kwargs['bibtex']
@@ -252,24 +211,14 @@ def do_add(config, **kwargs):
 
     key = keys[0]
 
-    archive_path = os.path.join(config['archive'], key)
-    if os.path.exists(archive_path):
-        print('Archive {} already exists! Aborting.'.format(key))
-        return 1
+    manager.add(key, pdf_file_name, bib_file_name)
 
-    archive_pdf_path = os.path.join(archive_path, key + '.pdf')
-    archive_bib_path = os.path.join(archive_path, key + '.bib')
-
-    os.mkdir(archive_path)
     if kwargs['delete']:
-        shutil.move(pdf_file_name, archive_pdf_path)
-        shutil.move(bib_file_name, archive_bib_path)
-    else:
-        shutil.copy(pdf_file_name, archive_pdf_path)
-        shutil.copy(bib_file_name, archive_bib_path)
+        os.remove(pdf_file_name)
+        os.remove(bib_file_name)
 
     if kwargs['bookmark']:
-        do_bookmark(config, key=key, name=None)
+        manager.bookmark(key, None)
 
     if kwargs['bookmark']:
         msg = 'Archived to {} and bookmarked.'.format(key)
@@ -278,41 +227,28 @@ def do_add(config, **kwargs):
     print(msg)
 
 
-def do_where(config, **kwargs):
+def do_where(manager, **kwargs):
     ''' Print out library directories. '''
+    paths = manager.paths
+
     if kwargs['archive']:
-        print(config['archive'])
+        print(paths['archive'])
     elif kwargs['shelves']:
-        print(config['shelves'])
+        print(paths['shelves'])
     elif kwargs['bookmarks']:
-        if os.path.isdir(config['bookmarks']):
-            print(config['bookmarks'])
+        if os.path.isdir(paths['bookmarks']):
+            print(paths['bookmarks'])
         else:
             return 1
     else:
-        print(config['library'])
+        print(paths['root'])
     return 0
 
 
-def do_bookmark(config, **kwargs):
+def do_bookmark(manager, **kwargs):
     ''' Bookmark a document. This creates a symlink to the document in the
         bookmarks directory. '''
-
-    # Create the bookmarks directory if it doesn't already exist.
-    bm_dir = config['bookmarks']
-    if not os.path.isdir(bm_dir):
-        os.mkdir(bm_dir)
-        print('Created bookmarks directory at: {}'.format(bm_dir))
-
-    key = parse_key(kwargs['key'])
-    dest_name = kwargs['name'] if kwargs['name'] is not None else key
-
-    # Create the symlink to the document in the bookmarks directory.
-    src = os.path.join(config['archive'], key)
-    dest = os.path.join(config['bookmarks'], dest_name)
-    os.symlink(src, dest)
-
-    return 0
+    manager.bookmark(kwargs['key'], kwargs['name'])
 
 
 def parse_args():
@@ -396,8 +332,7 @@ def parse_args():
                                  help='Name for the bookmark.')
     bookmark_parser.set_defaults(func=do_bookmark)
 
-    # Every subparser has an associated function that we call here, passing all
-    # other options as arguments.
+    # Every subparser has an associated function, that we extract here.
     args = parser.parse_args()
     args = vars(args)
     func = args.pop('func')
@@ -409,13 +344,21 @@ def main():
         print('Usage: lib command [opts] [args]. Try --help.')
         return 1
 
-    # Load the config.
-    config = confutil.load(CONFIG_SEARCH_DIRS, CONFIG_FILE_NAME)
-    if config is None:
+    # Load the LibraryManager.
+    try:
+        manager = management.init(CONFIG_SEARCH_DIRS, CONFIG_FILE_NAME)
+    except management.LibraryException as e:
+        print(e.message)
         return 1
 
     args, func = parse_args()
-    return func(config, **args)
+
+    try:
+        func(manager, **args)
+    except management.LibraryException as e:
+        print(e.message)
+        return 1
+    return 0
 
 
 if __name__ == '__main__':
