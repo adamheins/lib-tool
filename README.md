@@ -1,6 +1,8 @@
 # librarian
 A simple CLI-based document organization tool.
 
+## Library Structure
+
 Documents should be organized in the following manner:
 ```
 library/
@@ -19,10 +21,13 @@ symlinks into the archive, such that the documents can be organized in any way.
 The `bookmarks` directory is the destination for symlinks to documents produced
 by using the `bookmark` command or `-b` flag with the `add` command.
 
+## lib tool
+
 The `lib` tool provides a convenient way to interact with this structure. It
 currently has the following commands:
 * `add` - Add a PDF and bibtex file to the archive.
 * `bookmark` - Book a document for later viewing.
+* `cd` - Change directories into the library.
 * `ln` - Create a symlink to a document in the archive.
 * `index` - Generate an HTML file listing all documents.
 * `compile` - Compile a single directory of every PDF or a single bibtex file
@@ -37,3 +42,8 @@ path to the library. For example:
 ```yaml
 library: ~/Documents/Library
 ```
+
+## Installation
+To install, simply clone this directory and arrange for `lib.zsh` to be
+sourced (only zsh is supported at the moment). To enable zsh autocompletion,
+add `_lib` to a directory on your `$fpath`.
