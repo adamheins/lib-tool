@@ -5,6 +5,7 @@ zstyle ':completion:*:*:lib:*:*' verbose no
 
 
 # Get the path to the library.
+local libpath=$(lib where)
 local archivepath=$(lib where -a)
 local shelvespath=$(lib where -s)
 
@@ -20,7 +21,13 @@ _lib_cmds() {
 
 _lib_where() {
   _arguments '-a' '--archive' \
+             '-b' '--bookmarks' \
              '-s' '--shelves'
+}
+
+
+_lib_cd() {
+  _path_files -W libpath -/
 }
 
 
@@ -66,9 +73,10 @@ case $state in
     case $line[1] in
       (link|ln)  _lib_link ;;
       (bookmark) _lib_key ;;
+      (cd)       _lib_cd ;;
       (open)     _lib_open ;;
       (add)      _lib_add  ;;
-      (where|cd) _lib_where ;;
+      (where)    _lib_where ;;
     esac
     ;;
 esac

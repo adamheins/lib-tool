@@ -14,7 +14,7 @@ exe="$here/librarian.py"
 # Wrap lib executable to allow for cd functionality.
 lib() {
   if [[ $1 == "cd" ]]; then
-    cd $($exe where ${@:2})
+    cd $($exe where)/${@:2}
   else
     $exe $@
   fi
