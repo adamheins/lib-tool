@@ -71,12 +71,12 @@ _arguments -C '1: :_lib_cmds' '*::args:->args'
 case $state in
   (args)
     case $line[1] in
-      (link|ln)  _lib_link ;;
-      (bookmark) _lib_key ;;
-      (cd)       _lib_cd ;;
-      (open)     _lib_open ;;
-      (add)      _lib_add  ;;
-      (where)    _lib_where ;;
+      (link|ln)     _lib_link ;;
+      (bookmark|bm) _lib_key ;;
+      (cd)          _lib_cd ;;
+      (open)        _lib_open ;;
+      (add)         _lib_add  ;;
+      (where)       _lib_where ;;
     esac
     ;;
 esac
