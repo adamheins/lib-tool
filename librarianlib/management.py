@@ -124,7 +124,7 @@ class LibraryManager(object):
     def add(self, key, pdf_src_path, bib_src_path):
         key = parse_key(key)
 
-        if self.has_key(key):
+        if self.archive.has_key(key):
             message = 'Archive {} already exists! Aborting.'.format(key)
             raise LibraryException(message)
 
