@@ -28,15 +28,6 @@ def parse_key(key):
     return key.split(os.path.sep)[-1]
 
 
-def init(search_dirs, config_name):
-    ''' Initialize a LibraryManager. '''
-    config_file_path = find_config(search_dirs, config_name)
-    if config_file_path is None:
-        raise LibraryException('Could not find config file.')
-
-    return LibraryManager(config_file_path)
-
-
 class Archive(object):
     ''' Provides convenience functions to interact with the library's archive.
         '''
@@ -44,34 +35,46 @@ class Archive(object):
         self.path = path
 
     def has_key(self, key):
+        ''' Returns True if the key is in the archive, false otherwise. '''
         path = os.path.join(self.path, key)
         return os.path.isdir(path)
 
     def all_keys(self):
+        ''' Returns a list of all keys in the archive. '''
         return os.listdir(self.path)
 
     def all_bibtex_files(self):
+        ''' Returns a list of paths of all bibtex files in the archive. '''
         return glob.glob(self.path + '/**/*.bib')
 
     def all_pdf_files(self):
+        ''' Returns a list of paths of all PDF files in the archive. '''
         return glob.glob(self.path + '/**/*.pdf')
 
     def key_path(self, key):
+        ''' Returns the path to the key. '''
         return os.path.join(self.path, key)
 
     def bib_path(self, key):
+        ''' Returns the path to the bibtex file of the key. '''
         return os.path.join(self.key_path(key), key + '.bib')
 
     def pdf_path(self, key):
+        ''' Returns the path to the PDF file of the key. '''
         return os.path.join(self.key_path(key), key + '.pdf')
 
     def pdf_to_key(self, pdf):
+        ''' Convert a PDF path to its key name. '''
         base = os.path.basename(pdf)
         return base.split('.')[0]
 
 
 class LibraryManager(object):
-    def __init__(self, config_file_path):
+    def __init__(self, search_dirs, config_name):
+        config_file_path = find_config(search_dirs, config_name)
+        if config_file_path is None:
+            raise LibraryException('Could not find config file.')
+
         with open(config_file_path) as f:
             config = yaml.load(f)
 
