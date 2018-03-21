@@ -162,5 +162,6 @@ class LibraryManager(object):
             os.mkdir(self.paths['bookmarks'])
             print('Created bookmarks directory at: {}'.format(self.paths['bookmarks']))
 
+        name = name if name is not None else key
         path = os.path.join(self.paths['bookmarks'], name)
         self.link(key, path)
