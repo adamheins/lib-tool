@@ -94,6 +94,12 @@ def parse_args(cmd_interface):
                                  help='Name for the bookmark.')
     bookmark_parser.set_defaults(func=cmd_interface.bookmark)
 
+    # Hidden subcommand for generating non-trivial completion lists for
+    # commands.
+    complete_parser = subparsers.add_parser('complete', help=argparse.SUPPRESS)
+    complete_parser.add_argument('cmd')
+    complete_parser.set_defaults(func=cmd_interface.complete)
+
     # Every subparser has an associated function, that we extract here.
     args = parser.parse_args()
     args = vars(args)

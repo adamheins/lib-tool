@@ -40,9 +40,13 @@ _lib_key() {
 
 # Completion for the open subcommand.
 _lib_open() {
-  local paths=($archivepath $shelvespath)
-  _arguments '-b[open bibtex]' \
-             '1: :_path_files -W paths -/'
+  # Here we use both a custom list of completion strings and the files in the
+  # shelves directory.
+  local paths=($shelvespath)
+  local opts=($(lib complete open))
+  _alternative 'args: :((-b\:"open bibtex"))' \
+               'files: :_path_files -W paths -/' \
+               "links: :_values key $opts"
 }
 
 

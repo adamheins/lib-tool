@@ -140,3 +140,24 @@ class LibraryCommandInterface(object):
         ''' Bookmark a document. This creates a symlink to the document in the
             bookmarks directory. '''
         self.manager.bookmark(kwargs['key'], kwargs['name'])
+
+    def complete(self, **kwargs):
+        cmd = kwargs['cmd']
+        completions = []
+
+        if cmd == 'open':
+            def is_key(f):
+                if not os.path.islink(f):
+                    return False
+                path = os.readlink(f)
+                key = path.split(os.path.sep)[-1]
+                return self.manager.archive.has_key(key)
+
+            # We also allow autocompletion of symlinks in the cwd
+            files = os.listdir(os.getcwd())
+            files = list(filter(is_key, files))
+
+            keys = self.manager.archive.all_keys()
+            completions = files + keys
+
+        print(' '.join(completions))
