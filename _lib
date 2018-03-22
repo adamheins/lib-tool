@@ -14,7 +14,8 @@ local shelvespath=$(lib where -s)
 _lib_cmds() {
   local subcmds=('open:open' 'add:add' 'grep:grep' 'search:search' \
                  'link:link' 'ln:ln' 'index:index' 'compile:compile' \
-                 'where:where' 'bookmark:bookmark' 'bm:bm' 'cd:cd')
+                 'where:where' 'bookmark:bookmark' 'bm:bm' 'cd:cd' \
+                 'rekey':'rekey')
   _describe 'command' subcmds
 }
 
@@ -33,8 +34,9 @@ _lib_cd() {
 
 # Simply complete a key in the archive or shelves.
 _lib_key() {
-  local paths=($archivepath $shelvespath)
-  _arguments '1: :_path_files -W paths -/'
+  local keys=($(lib complete keys))
+  _values 'key' $keys
+  # _arguments '1: :_path_files -W paths -/'
 }
 
 
@@ -43,7 +45,7 @@ _lib_open() {
   # Here we use both a custom list of completion strings and the files in the
   # shelves directory.
   local paths=($shelvespath)
-  local opts=($(lib complete open))
+  local opts=($(lib complete keys-and-links))
   _alternative 'args: :((-b\:"open bibtex"))' \
                'files: :_path_files -W paths -/' \
                "links: :_values key $opts"
@@ -80,6 +82,7 @@ case $state in
       (cd)          _lib_cd ;;
       (open)        _lib_open ;;
       (add)         _lib_add  ;;
+      (rekey)       _lib_key ;;
       (where)       _lib_where ;;
     esac
     ;;

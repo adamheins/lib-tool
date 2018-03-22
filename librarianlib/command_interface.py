@@ -4,6 +4,7 @@ import shutil
 import subprocess
 
 import bibtexparser
+from bibtexparser.bwriter import BibTexWriter
 import editor
 
 from librarianlib import index, links, search
@@ -142,10 +143,14 @@ class LibraryCommandInterface(object):
         self.manager.bookmark(kwargs['key'], kwargs['name'])
 
     def complete(self, **kwargs):
+        ''' Print completions for commands. '''
         cmd = kwargs['cmd']
         completions = []
 
-        if cmd == 'open':
+        # TODO a more thoughtful implementation
+        if cmd == 'keys':
+            completions = self.manager.archive.all_keys()
+        elif cmd == 'keys-and-links':
             def is_key(f):
                 if not os.path.islink(f):
                     return False
@@ -161,3 +166,27 @@ class LibraryCommandInterface(object):
             completions = files + keys
 
         print(' '.join(completions))
+
+    def rekey(self, **kwargs):
+        ''' Change the name of a key. '''
+        key = kwargs['key']
+        if not self.manager.archive.has_key(key):
+            print('Key {} not found.'.format(key))
+            return 1
+
+        new_key = kwargs['new-key']
+        bib_path = self.manager.archive.bib_path(key)
+        with open(bib_path) as f:
+            bib_info = bibtexparser.load(f)
+
+        if new_key is None:
+            new_key = list(bib_info.entries_dict.keys())[0]
+        else:
+            # Write new_key to the bibtex file.
+            bib_info.entries[0]['ID'] = new_key
+            bib_writer = BibTexWriter()
+            with open(bib_path, 'w') as f:
+                f.write(bib_writer.write(bib_info))
+
+        self.manager.rekey(key, new_key)
+        print('Renamed {} to {}.'.format(key, new_key))

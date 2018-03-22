@@ -139,6 +139,22 @@ class LibraryManager(object):
         shutil.copy(pdf_src_path, pdf_dest_path)
         shutil.copy(bib_src_path, bib_dest_path)
 
+    def rekey(self, key, new_key):
+        pdf_src_path = self.archive.pdf_path(key)
+        bib_src_path = self.archive.bib_path(key)
+
+        # First rename the PDF and bibtex files.
+        key_path = self.archive.key_path(key)
+        pdf_dest_path = os.path.join(key_path, new_key + '.pdf')
+        bib_dest_path = os.path.join(key_path, new_key + '.bib')
+
+        shutil.move(pdf_src_path, pdf_dest_path)
+        shutil.move(bib_src_path, bib_dest_path)
+
+        # Rename the directory.
+        new_key_path = self.archive.key_path(new_key)
+        shutil.move(key_path, new_key_path)
+
     def link(self, key, path):
         key = parse_key(key)
         path = path if path is not None else key
