@@ -104,12 +104,13 @@ def search_text(manager, regex, oneline, verbose=False):
 
     # Sort and parse the results.
     output = []
-    for result in sorted(results, key=lambda result: result['count']):
+    for result in sorted(results, key=lambda result: result['count'],
+                         reverse=True):
         file_output = count_message(result['key'], result['count'])
         output.append(file_output)
 
     if len(output) == 0:
-        return 'No matches.'
+        return 'No matches in text.'
     elif oneline:
         return '\n'.join(output)
     else:
@@ -144,14 +145,15 @@ def search_bibtex(manager, regex, oneline):
 
     # Sort and parse the results.
     output = []
-    for result in sorted(results, key=lambda result: result['count']):
+    for result in sorted(results, key=lambda result: result['count'],
+                         reverse=True):
         file_output = [count_message(result['key'], result['count'])]
         if not oneline:
             file_output.append('\n'.join(result['detail']))
         output.append('\n'.join(file_output))
 
     if len(output) == 0:
-        return 'No matches.'
+        return 'No matches in bibtex.'
     elif oneline:
         return '\n'.join(output)
     else:
