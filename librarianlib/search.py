@@ -87,10 +87,18 @@ def search_text(manager, regex, oneline, verbose=False):
         current_hash = hash_file(pdf)
 
         # If the document has changed (as indicated by a different or
-        # non-preexisting hash), we need to extract it's text.
-        if current_hash != old_hash:
+        # non-preexisting hash) or the text file doesn't exist for some reason,
+        # we need to extract it's text.
+        if current_hash != old_hash or not os.path.exists(text_fname):
             write_file_hash(hash_fname, current_hash)
-            text = parse_pdf_text(pdf)
+
+            # Some PDFs have bizarre encodings on which textract fails. For now
+            # we just silently ignore such failures and don't do text search on
+            # these.
+            try:
+                text = parse_pdf_text(pdf)
+            except TypeError:
+                continue
             write_text_file(text_fname, text)
 
             if verbose:
