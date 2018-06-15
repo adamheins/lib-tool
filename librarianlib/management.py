@@ -96,14 +96,16 @@ class LibraryManager(object):
                 message = '{} does not exist!'.format(self.paths[key])
                 raise LibraryException(message)
 
-    def bibtex_string(self):
+    def bibtex_list(self):
+        ''' Create a list of the contents of all bibtex files in the archive. '''
         bib_list = []
+        bib_files = self.archive.all_bibtex_files()
 
-        for bib_path in self.archive.all_bibtex_files():
+        for bib_path in bib_files:
             with open(bib_path) as bib_file:
                 bib_list.append(bib_file.read().strip())
 
-        return '\n\n'.join(bib_list)
+        return zip(bib_list, bib_files)
 
     def bibtex_dict(self, extra_customization=None):
         ''' Load bibtex information as a dictionary. '''
@@ -118,11 +120,24 @@ class LibraryManager(object):
                 record = extra_customization(record)
             return record
 
-        parser = bibtexparser.bparser.BibTexParser()
-        parser.customization = customizations
-
-        bibtex = self.bibtex_string()
-        return bibtexparser.loads(bibtex, parser=parser).entries_dict
+        # We parse each string of bibtex separately and then merge the
+        # resultant dictionaries together, so that we can handle malformed
+        # bibtex files individually.
+        entries_dict = {}
+        bibtex = self.bibtex_list()
+        for bibstr, bibfile in bibtex:
+            # common_strings=True lets us parse the month field as "jan",
+            # "feb", etc.
+            parser = bibtexparser.bparser.BibTexParser(
+                    customization=customizations,
+                    common_strings=True)
+            try:
+                d = bibtexparser.loads(bibstr, parser=parser).entries_dict
+            except:
+                print('Encountered an error while processing {}.'.format(bibfile))
+                continue
+            entries_dict.update(d)
+        return entries_dict
 
     def add(self, key, pdf_src_path, bib_src_path):
         key = parse_key(key)
