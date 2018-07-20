@@ -97,7 +97,9 @@ def search_text(manager, regex, oneline, verbose=False):
             # these.
             try:
                 text = parse_pdf_text(pdf)
-            except TypeError:
+            except (TypeError, UnicodeDecodeError):
+                if verbose:
+                    print('Failed to parse {}.'.format(key))
                 continue
             write_text_file(text_fname, text)
 

@@ -28,6 +28,18 @@ def parse_key(key):
     return key.split(os.path.sep)[-1]
 
 
+class Document(object):
+    # TODO?
+    def __init__(self, archive_path, key):
+        self.key = key
+        self.pdf_file = key + '.pdf'
+        self.bib_file = key + '.bib'
+
+    def exists(self, archive_path):
+        # check if this doc is in the archive
+        pass
+
+
 class Archive(object):
     ''' Provides convenience functions to interact with the library's archive.
         '''
