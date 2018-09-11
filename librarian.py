@@ -101,7 +101,7 @@ def parse_args(cmd_interface):
     complete_parser.set_defaults(func=cmd_interface.complete)
 
     rekey_parser = subparsers.add_parser(
-            'rekey',
+            'rekey', aliases=['rename'],
             help='Change the name of a key.')
     rekey_parser.add_argument('key', help='The key to change.')
     rekey_parser.add_argument('new-key', nargs='?', help='New key name.')

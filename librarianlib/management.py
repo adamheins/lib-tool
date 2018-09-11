@@ -1,3 +1,4 @@
+import datetime
 import glob
 import os
 import shutil
@@ -29,15 +30,71 @@ def parse_key(key):
 
 
 class Document(object):
-    # TODO?
-    def __init__(self, archive_path, key):
-        self.key = key
-        self.pdf_file = key + '.pdf'
-        self.bib_file = key + '.bib'
+    # archive agnostic constructor?
+    # only access documents through the associated archive
+    # file paths should be absolute
 
-    def exists(self, archive_path):
-        # check if this doc is in the archive
+    def __init__(self, key, bibtex, text=None, fhash=None):
+        self.key = key
+        self.bibtex = bibtex
+        self.text = text
+        self.hash = fhash
+
+    def index(self):
         pass
+
+    def hash(self):
+        pass
+
+
+class ArchivalDocument(object):
+    def __init__(self, archive, doc, added, accessed):
+        self.doc = doc
+        self.archive = archive
+
+        # TODO may be redundant
+        self.key_path = os.path.join(archive.path, doc.key)
+        self.pdf_path = os.path.join(archive.path, doc.key, '.pdf')
+        self.bib_path = os.path.join(archive.path, doc.key, '.bib')
+
+        # Dates.
+        self.added = added
+        self.accessed = accessed
+
+    @staticmethod
+    def new(archive, doc):
+        today = datetime.date.today()
+        return ArchivalDocument(archive, doc, today, today)
+
+    @staticmethod
+    def load(archive, key):
+        added, accessed, text, fhash = ArchivalDocument._load_metadata(archive, key)
+        doc = Document(key, text=text, fhash=fhash)
+        return ArchivalDocument(archive, doc, added, accessed)
+
+    def save(self):
+        pass
+
+    def _save_metadata(self, archive, key):
+        pass
+
+    @staticmethod
+    def _load_metadata(archive, key):
+        path = os.path.join(archive.path, key, '.metadata')
+
+        with open(os.path.join(path, 'added.txt')) as f:
+            added = datetime.date.strptime(f.read(), '%Y-%m-%d')
+        with open(os.path.join(path, 'accessed.txt')) as f:
+            accessed = datetime.date.strptime(f.read(), '%Y-%m-%d')
+        with open(os.path.join(path, 'text.txt')) as f:
+            text = f.read()
+        with open(os.path.join(path, 'hash.md5')) as f:
+            fhash = f.read()
+
+        return added, accessed, text, fhash
+
+    def files(self):
+        return self.key_path, self.pdf_path, self.bib_path
 
 
 class Archive(object):
@@ -79,6 +136,12 @@ class Archive(object):
         ''' Convert a PDF path to its key name. '''
         base = os.path.basename(pdf)
         return base.split('.')[0]
+
+    def pdfs():
+        pass
+
+    def keys():
+        pass
 
 
 class LibraryManager(object):
