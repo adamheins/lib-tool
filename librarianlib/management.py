@@ -1,4 +1,5 @@
 import datetime
+import hashlib
 import glob
 import os
 import shutil
@@ -6,6 +7,7 @@ import yaml
 
 import bibtexparser
 import bibtexparser.customization as customization
+import textract
 
 from .exceptions import LibraryException
 
@@ -29,72 +31,129 @@ def parse_key(key):
     return key.split(os.path.sep)[-1]
 
 
-class Document(object):
-    # archive agnostic constructor?
-    # only access documents through the associated archive
-    # file paths should be absolute
+# class Document(object):
+#     def __init__(self, pdf_path, bib_path):
+#         self.pdf_path = pdf_path
+#         self.bib_path = bib_path
+#
+#         with open(bib_path) as bib_file:
+#             bib_info = bibtexparser.load(bib_file)
+#
+#         keys = list(bib_info.entries_dict.keys())
+#         if len(keys) > 1:
+#             raise Exception('More than one entry in bibtex file.')
+#         self.key = keys[0]
 
-    def __init__(self, key, bibtex, text=None, fhash=None):
-        self.key = key
-        self.bibtex = bibtex
-        self.text = text
-        self.hash = fhash
 
-    def index(self):
-        pass
+BUF_SIZE = 65536
 
-    def hash(self):
-        pass
+
+def hash_pdf(fname):
+    md5 = hashlib.md5()
+
+    with open(fname, 'rb') as f:
+        while True:
+            data = f.read(BUF_SIZE)
+            if not data:
+                break
+            md5.update(data)
+
+    return md5.hexdigest()
+
+
+def parse_pdf_text(pdf_path):
+    return textract.process(pdf_path).decode('utf-8')
+
+
+def key_from_bibtex(bib_path):
+
 
 
 class ArchivalDocument(object):
-    def __init__(self, archive, doc, added, accessed):
-        self.doc = doc
+    def __init__(self, archive, key):
         self.archive = archive
+        self.key = key
 
-        # TODO may be redundant
-        self.key_path = os.path.join(archive.path, doc.key)
-        self.pdf_path = os.path.join(archive.path, doc.key, '.pdf')
-        self.bib_path = os.path.join(archive.path, doc.key, '.bib')
+        self.key_path = os.path.join(archive.path, key)
+        self.pdf_path = os.path.join(self.key_path, key + '.pdf')
+        self.bib_path = os.path.join(self.key_path, key + '.bib')
+
+        with open(self.bib_path) as f:
+            self.bibtex = f.read().strip()
+
+        def _read_date(fname):
+            metadata_path = os.path.join(self.key_path, '.metadata')
+            path = os.path.join(metadata_path, fname)
+            if os.path.exists(path):
+                with open(path) as f:
+                    date = f.read()
+                return datetime.date.strptime(date, '%Y-%m-%d')
+            else:
+                date = datetime.date.today()
+                with open(path, 'w') as f:
+                    f.write(date.isoformat())
+                return date
 
         # Dates.
-        self.added = added
-        self.accessed = accessed
+        self.added = _read_date('added.txt')
+        self.accessed = _read_date('accessed.txt')
+
+    def text(self):
+        ''' Retrieve the plain text of the PDF file. '''
+        metadata_path = os.path.join(self.key_path, '.metadata')
+        hash_path = os.path.join(metadata_path, 'hash.md5')
+        text_path = os.path.join(metadata_path, 'text.txt')
+
+        current_hash = hash_pdf(self.pdf_path)
+        if os.path.exists(hash_path):
+            with open(hash_path) as f:
+                old_hash = f.read()
+        else:
+            old_hash = None
+
+        if (not os.path.exists(text_path) or not os.path.exists(hash_path)
+                or current_hash != old_hash):
+            text = parse_pdf_text(self.pdf_path)
+            with open(hash_path, 'w') as f:
+                f.write(current_hash)
+            with open(text_path, 'w') as f:
+                f.write(text)
+
+        return text
+
+    def access(self):
+        ''' Update the access date to today. '''
+        self.accessed = datetime.date.today()
+        accessed_path = os.path.join(self.key_path, '.metadata', 'accessed.txt')
+        with open(accessed_path, 'w') as f:
+            f.write(self.accessed.isoformat())
+
+    def files(self):
+        ''' Convenient list of files. '''
+        # TODO is this needed?
+        return self.key_path, self.pdf_path, self.bib_path
 
     @staticmethod
-    def new(archive, doc):
-        today = datetime.date.today()
-        return ArchivalDocument(archive, doc, today, today)
+    def new(archive, pdf_path, bib_path):
+        # TODO does this stuff belong in the Archive class?
+        # 1. read key
+        with open(bib_path) as bib_file:
+            bib_info = bibtexparser.load(bib_file)
+
+        keys = list(bib_info.entries_dict.keys())
+        if len(keys) > 1:
+            raise Exception('More than one entry in bibtex file.')
+        key = keys[0]
+
+        # 2. generate and create key path (check for collision)
+        # 3. copy in the files
 
     @staticmethod
     def load(archive, key):
-        added, accessed, text, fhash = ArchivalDocument._load_metadata(archive, key)
-        doc = Document(key, text=text, fhash=fhash)
-        return ArchivalDocument(archive, doc, added, accessed)
+        if not archive.contains(key):
+            raise Exception('Key {} not found in archive.'.format(key))
+        return ArchivalDocument(archive, key)
 
-    def save(self):
-        pass
-
-    def _save_metadata(self, archive, key):
-        pass
-
-    @staticmethod
-    def _load_metadata(archive, key):
-        path = os.path.join(archive.path, key, '.metadata')
-
-        with open(os.path.join(path, 'added.txt')) as f:
-            added = datetime.date.strptime(f.read(), '%Y-%m-%d')
-        with open(os.path.join(path, 'accessed.txt')) as f:
-            accessed = datetime.date.strptime(f.read(), '%Y-%m-%d')
-        with open(os.path.join(path, 'text.txt')) as f:
-            text = f.read()
-        with open(os.path.join(path, 'hash.md5')) as f:
-            fhash = f.read()
-
-        return added, accessed, text, fhash
-
-    def files(self):
-        return self.key_path, self.pdf_path, self.bib_path
 
 
 class Archive(object):
@@ -102,6 +161,26 @@ class Archive(object):
         '''
     def __init__(self, path):
         self.path = path
+
+    def add(self, pdf_path, bib_path):
+        return ArchivalDocument.new(self, pdf_path, bib_path)
+
+    # TODO ability to update files and to update key
+    def update(self, key, doc):
+        # Update doc pointed to by key with data from doc
+        pass
+
+    def retrieve(self, keys='*'):
+        if keys == '*':
+            keys = os.listdir(self.path)
+        elif type(keys) == str:
+            keys = [keys]
+        return [ArchivalDocument.load(self, key) for key in keys]
+
+    def contains(self, key):
+        ''' Returns True if the key is in the archive, false otherwise. '''
+        path = os.path.join(self.path, key)
+        return os.path.isdir(path)
 
     def has_key(self, key):
         ''' Returns True if the key is in the archive, false otherwise. '''
