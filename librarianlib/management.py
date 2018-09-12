@@ -10,6 +10,7 @@ from bibtexparser.bwriter import BibTexWriter
 import textract
 
 from .exceptions import LibraryException
+from . import style
 
 
 HASH_FILE_BUFFER_SIZE = 65536
@@ -53,6 +54,19 @@ def key_from_bibtex(bib_path):
         raise LibraryException('More than one entry in bibtex file.')
 
     return keys[0]
+
+
+def _create_count_message(key, count):
+    ''' Create a message about count of matches for the given key. '''
+    if count == 1:
+        return '{}: 1 match'.format(style.bold(key))
+    elif count > 1:
+        return '{}: {} matches'.format(style.bold(key), count)
+
+
+def _match_highlighter(match):
+    ''' Highlight match. '''
+    return style.yellow(match.group(0))
 
 
 class DocumentPaths(object):
@@ -319,3 +333,70 @@ class LibraryManager(object):
         name = name if name is not None else key
         path = os.path.join(self.paths['bookmarks'], name)
         self.link(key, path)
+
+    def search_text(self, regex, oneline, verbose=False):
+        ''' Search for the regex in the PDF documents. '''
+        # We assume that we want to search the whole corpus. For single
+        # document searches, open the doc in a PDF viewer.
+        results = []
+        for doc in self.archive.retrieve():
+            text = doc.text()
+            count = len(regex.findall(text))
+            if count > 0:
+                results.append({'key': doc.key, 'count': count, 'detail': ''})
+
+        # Sort and parse the results.
+        output = []
+        for result in sorted(results, key=lambda result: result['count'],
+                             reverse=True):
+            msg = _create_count_message(result['key'], result['count'])
+            output.append(msg)
+
+        if len(output) == 0:
+            return 'No matches in text.'
+        elif oneline:
+            return '\n'.join(output)
+        else:
+            return '\n'.join(output) # TODO when more detail is given, use two \n\n
+
+    def search_bibtex(self, regex, oneline):
+        ''' Search for the regex in bibtex file. '''
+        results = []
+
+        for key, info in self.bibtex_dict().items():
+            count = 0
+            detail = []
+            for field, value in info.items():
+                # Skip the ID field; it's already a composition of parts of
+                # other fields.
+                if field == 'ID':
+                    continue
+
+                # Find all the matches.
+                matches = regex.findall(value)
+                count += len(matches)
+                if len(matches) == 0:
+                    continue
+
+                # Highlight the matches.
+                s = regex.sub(_match_highlighter, value)
+                detail.append('  {}: {}'.format(field, s))
+
+            if count > 0:
+                results.append({'key': key, 'count': count, 'detail': detail})
+
+        # Sort and parse the results.
+        output = []
+        for result in sorted(results, key=lambda result: result['count'],
+                             reverse=True):
+            msg = _create_count_message(result['key'], result['count'])
+            if not oneline:
+                msg += '\n'.join(result['detail'])
+            output.append(msg)
+
+        if len(output) == 0:
+            return 'No matches in bibtex.'
+        elif oneline:
+            return '\n'.join(output)
+        else:
+            return '\n\n'.join(output)

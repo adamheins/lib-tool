@@ -7,7 +7,7 @@ import bibtexparser
 from bibtexparser.bwriter import BibTexWriter
 import editor
 
-from librarianlib import index, links, search
+from librarianlib import index
 from librarianlib.exceptions import LibraryException
 
 
@@ -69,12 +69,13 @@ class LibraryCommandInterface(object):
         search_text = kwargs['text'] or not kwargs['bib']
 
         if search_bib:
-            bibtex_results = search.search_bibtex(self.manager, regex,
-                                                  kwargs['oneline'])
+            bibtex_results = self.manager.search_bibtex(regex,
+                                                        kwargs['oneline'])
             print(bibtex_results)
+
         if search_text:
-            text_results = search.search_text(self.manager, regex,
-                                              kwargs['oneline'], verbose=True)
+            text_results = self.manager.search_text(regex, kwargs['oneline'],
+                                                    verbose=True)
             print(text_results)
 
     def index(self, **kwargs):
