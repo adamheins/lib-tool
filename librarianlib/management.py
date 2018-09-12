@@ -77,13 +77,14 @@ def key_from_bibtex(bib_path):
 
 
 class ArchivalDocument(object):
-    def __init__(self, archive, key):
-        self.archive = archive
+    ''' A document in an archive. '''
+    # path contains key
+    def __init__(self, path, key):
+        self.path = path
         self.key = key
 
-        self.key_path = os.path.join(archive.path, key)
-        self.pdf_path = os.path.join(self.key_path, key + '.pdf')
-        self.bib_path = os.path.join(self.key_path, key + '.bib')
+        self.pdf_path = os.path.join(self.path, key + '.pdf')
+        self.bib_path = os.path.join(self.path, key + '.bib')
 
         with open(self.bib_path) as f:
             self.bibtex = f.read().strip()
@@ -138,33 +139,11 @@ class ArchivalDocument(object):
     def files(self):
         ''' Convenient list of files. '''
         # TODO is this needed?
-        return self.key_path, self.pdf_path, self.bib_path
-
-    @staticmethod
-    def new(archive, pdf_path, bib_path):
-        key = key_from_bibtex(bib_path)
-
-        if archive.contains(key):
-            msg = 'Archive already contains key {}. Aborting.'.format(key)
-            raise LibraryException(msg)
-
-        key_path = os.path.join(archive.path, key)
-        pdf_dest_path = os.path.join(key_path, key + '.pdf')
-        bib_dest_path = os.path.join(key_path, key + '.bib')
-
-        os.mkdir(key_path)
-
-        shutil.copy(pdf_path, pdf_dest_path)
-        shutil.copy(bib_path, bib_dest_path)
-
-        return ArchivalDocument(archive, key)
+        return self.path, self.pdf_path, self.bib_path
 
     @staticmethod
     def load(archive, key):
-        if not archive.contains(key):
-            raise Exception('Key {} not found in archive.'.format(key))
-        return ArchivalDocument(archive, key)
-
+        return ArchivalDocument(os.path.join(archive.path, key), key)
 
 
 class Archive(object):
@@ -174,19 +153,47 @@ class Archive(object):
         self.path = path
 
     def add(self, pdf_path, bib_path):
-        return ArchivalDocument.new(self, pdf_path, bib_path)
+        key = key_from_bibtex(bib_path)
 
-    # TODO ability to update files and to update key
+        if self.contains(key):
+            msg = 'Archive already contains key {}. Aborting.'.format(key)
+            raise LibraryException(msg)
+
+        doc_path = os.path.join(self.path, key)
+        pdf_dest_path = os.path.join(doc_path, key + '.pdf')
+        bib_dest_path = os.path.join(doc_path, key + '.bib')
+
+        # Create directory and copy in PDF and bibtex files.
+        os.mkdir(doc_path)
+        os.mkdir(os.path.join(doc_path, '.metadata'))
+        shutil.copy(pdf_path, pdf_dest_path)
+        shutil.copy(bib_path, bib_dest_path)
+
+        return ArchivalDocument(doc_path, key)
+
+    # TODO this should just be rekey, from below
     def update(self, key, doc):
         # Update doc pointed to by key with data from doc
         pass
 
-    def retrieve(self, keys='*'):
-        if keys == '*':
+    def retrieve(self, key='*'):
+        if type(key) == str:
+            if not self.contains(key):
+                raise Exception('Key {} not found in archive.'.format(key))
+            return ArchivalDocument(os.path.join(self.path, key), key)
+
+        if key == '*':
             keys = os.listdir(self.path)
-        elif type(keys) == str:
-            keys = [keys]
-        return [ArchivalDocument.load(self, key) for key in keys]
+        else:
+            keys = key
+
+        docs = []
+        for key in keys:
+            if not self.contains(key):
+                raise Exception('Key {} not found in archive.'.format(key))
+            docs.append(ArchivalDocument(os.path.join(self.path, key), key))
+
+        return docs
 
     def contains(self, key):
         ''' Returns True if the key is in the archive, false otherwise. '''
@@ -339,7 +346,7 @@ class LibraryManager(object):
         key = parse_key(key)
         path = path if path is not None else key
 
-        src = self.archive.key_path(key)
+        src = self.archive.retrieve(key).path
 
         if os.path.isabs(path):
             dest = path
