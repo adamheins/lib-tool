@@ -66,7 +66,14 @@ def parse_pdf_text(pdf_path):
 
 
 def key_from_bibtex(bib_path):
+    with open(bib_path) as bib_file:
+        bib_info = bibtexparser.load(bib_file)
 
+    keys = list(bib_info.entries_dict.keys())
+    if len(keys) > 1:
+        raise LibraryException('More than one entry in bibtex file.')
+
+    return keys[0]
 
 
 class ArchivalDocument(object):
@@ -135,18 +142,22 @@ class ArchivalDocument(object):
 
     @staticmethod
     def new(archive, pdf_path, bib_path):
-        # TODO does this stuff belong in the Archive class?
-        # 1. read key
-        with open(bib_path) as bib_file:
-            bib_info = bibtexparser.load(bib_file)
+        key = key_from_bibtex(bib_path)
 
-        keys = list(bib_info.entries_dict.keys())
-        if len(keys) > 1:
-            raise Exception('More than one entry in bibtex file.')
-        key = keys[0]
+        if archive.contains(key):
+            msg = 'Archive already contains key {}. Aborting.'.format(key)
+            raise LibraryException(msg)
 
-        # 2. generate and create key path (check for collision)
-        # 3. copy in the files
+        key_path = os.path.join(archive.path, key)
+        pdf_dest_path = os.path.join(key_path, key + '.pdf')
+        bib_dest_path = os.path.join(key_path, key + '.bib')
+
+        os.mkdir(key_path)
+
+        shutil.copy(pdf_path, pdf_dest_path)
+        shutil.copy(bib_path, bib_dest_path)
+
+        return ArchivalDocument(archive, key)
 
     @staticmethod
     def load(archive, key):
