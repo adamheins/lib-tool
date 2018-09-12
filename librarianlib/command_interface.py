@@ -11,6 +11,19 @@ from librarianlib import index, links, search
 from librarianlib.exceptions import LibraryException
 
 
+def sanitize_key(key):
+    ''' Clean up a user-supplied document key. '''
+    if key is None:
+        return None
+
+    # When completing, the user may accidentally include a trailing slash.
+    if key[-1] == '/':
+        key = key[:-1]
+
+    # If a nested path is given, we just want the last piece.
+    return key.split(os.path.sep)[-1]
+
+
 class LibraryCommandInterface(object):
     ''' Contains all user-facing commands. '''
     def __init__(self, manager):
@@ -18,21 +31,23 @@ class LibraryCommandInterface(object):
 
     def open(self, **kwargs):
         ''' Open a document for viewing. '''
+        key = sanitize_key(kwargs['key'])
+        doc = self.manager.archive.retrieve(key)
         if kwargs['bib']:
-            editor.edit(self.manager.archive.bib_path(kwargs['key']))
+            editor.edit(doc.paths.bib_path)
         else:
-            pdf_path = self.manager.archive.pdf_path(kwargs['key'])
-            cmd = 'nohup xdg-open {} >/dev/null 2>&1 &'.format(pdf_path)
+            cmd = 'nohup xdg-open {} >/dev/null 2>&1 &'.format(doc.paths.pdf_path)
             subprocess.run(cmd, shell=True)
 
     def link(self, **kwargs):
         ''' Create a symlink to the document in the archive. '''
-        key = kwargs['key']
+        key = sanitize_key(kwargs['key'])
 
         if kwargs['fix']:
             if os.path.isdir(key):
-                return links.fix_dir(self.manager, key)
-            return links.fix_one(self.manager, key)
+                self.manager.fix_links(key)
+            else:
+                self.manager.fix_link(key)
         else:
             self.manager.link(key, kwargs['name'])
 
@@ -77,16 +92,20 @@ class LibraryCommandInterface(object):
 
     def compile(self, **kwargs):
         ''' Compile a single bibtex file and/or a single directory of PDFs. '''
+        docs = self.manager.archive.retrieve()
+
+        # Compile all bibtex into a single file.
         if kwargs['bib']:
-            with open('bibtex.bib', 'w') as bib_file:
-                bib_file.write(self.manager.bibtex_string())
+            bibtex = '\n\n'.join([doc.bibtex for doc in docs])
+            with open('bibtex.bib', 'w') as f:
+                f.write(bibtex)
             print('Compiled bibtex files to bibtex.bib.')
 
+        # Compile all PDFs into a single directory.
         if kwargs['text']:
             os.mkdir('text')
-            for pdf_path in self.manager.archive.all_pdf_files():
-                shutil.copy(pdf_path, 'text')
-
+            for doc in docs:
+                shutil.copy(doc.paths.pdf_path, 'text')
             print('Copied PDFs to text/.')
 
     def add(self, **kwargs):
@@ -94,30 +113,19 @@ class LibraryCommandInterface(object):
         pdf_file_name = kwargs['pdf']
         bib_file_name = kwargs['bibtex']
 
-        with open(bib_file_name) as bib_file:
-            bib_info = bibtexparser.load(bib_file)
-
-        keys = list(bib_info.entries_dict.keys())
-        if len(keys) > 1:
-            print('It looks like there\'s more than one entry in the bibtex file. '
-                  + 'I\'m not sure what to do!')
-            return 1
-
-        key = keys[0]
-
-        self.manager.add(key, pdf_file_name, bib_file_name)
+        doc = self.manager.add(pdf_file_name, bib_file_name)
 
         if kwargs['delete']:
             os.remove(pdf_file_name)
             os.remove(bib_file_name)
 
         if kwargs['bookmark']:
-            self.manager.bookmark(key, None)
+            self.manager.bookmark(doc.key, None)
 
         if kwargs['bookmark']:
-            msg = 'Archived to {} and bookmarked.'.format(key)
+            msg = 'Archived to {} and bookmarked.'.format(doc.key)
         else:
-            msg = 'Archived to {}.'.format(key)
+            msg = 'Archived to {}.'.format(doc.key)
         print(msg)
 
     def where(self, **kwargs):
@@ -140,53 +148,38 @@ class LibraryCommandInterface(object):
     def bookmark(self, **kwargs):
         ''' Bookmark a document. This creates a symlink to the document in the
             bookmarks directory. '''
-        self.manager.bookmark(kwargs['key'], kwargs['name'])
+        key = sanitize_key(kwargs['key'])
+        self.manager.bookmark(key, kwargs['name'])
 
     def complete(self, **kwargs):
         ''' Print completions for commands. '''
         cmd = kwargs['cmd']
-        completions = []
+        keys = [doc.key for doc in self.manager.archive.retrieve()]
 
-        # TODO a more thoughtful implementation
+        # Completion just for keys in the archive.
         if cmd == 'keys':
-            completions = self.manager.archive.all_keys()
+            completions = keys
+
+        # Completion for keys as well as symlinks that point to keys.
         elif cmd == 'keys-and-links':
-            def is_key(f):
+            def link_points_to_key(f):
                 if not os.path.islink(f):
                     return False
                 path = os.readlink(f)
-                key = path.split(os.path.sep)[-1]
-                return self.manager.archive.has_key(key)
+                key = sanitize_key(os.path.basename(path))
+                return self.manager.archive.contains(key)
 
             # We also allow autocompletion of symlinks in the cwd
             files = os.listdir(os.getcwd())
-            files = list(filter(is_key, files))
+            files = list(filter(link_points_to_key, files))
 
-            keys = self.manager.archive.all_keys()
             completions = files + keys
 
         print(' '.join(completions))
 
     def rekey(self, **kwargs):
         ''' Change the name of a key. '''
-        key = kwargs['key']
-        if not self.manager.archive.has_key(key):
-            print('Key {} not found.'.format(key))
-            return 1
-
+        key = sanitize_key(kwargs['key'])
         new_key = kwargs['new-key']
-        bib_path = self.manager.archive.bib_path(key)
-        with open(bib_path) as f:
-            bib_info = bibtexparser.load(f)
-
-        if new_key is None:
-            new_key = list(bib_info.entries_dict.keys())[0]
-        else:
-            # Write new_key to the bibtex file.
-            bib_info.entries[0]['ID'] = new_key
-            bib_writer = BibTexWriter()
-            with open(bib_path, 'w') as f:
-                f.write(bib_writer.write(bib_info))
-
         self.manager.rekey(key, new_key)
         print('Renamed {} to {}.'.format(key, new_key))

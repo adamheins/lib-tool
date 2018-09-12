@@ -1,15 +1,18 @@
 import datetime
 import hashlib
-import glob
 import os
 import shutil
 import yaml
 
 import bibtexparser
 import bibtexparser.customization as customization
+from bibtexparser.bwriter import BibTexWriter
 import textract
 
 from .exceptions import LibraryException
+
+
+HASH_FILE_BUFFER_SIZE = 65536
 
 
 def find_config(search_dirs, config_name):
@@ -21,39 +24,13 @@ def find_config(search_dirs, config_name):
     return None
 
 
-def parse_key(key):
-    ''' Clean up a user-supplied document key. '''
-    # When completing, the user may accidentally include a trailing slash.
-    if key[-1] == '/':
-        key = key[:-1]
-
-    # If a nested path is given, we just want the last piece.
-    return key.split(os.path.sep)[-1]
-
-
-# class Document(object):
-#     def __init__(self, pdf_path, bib_path):
-#         self.pdf_path = pdf_path
-#         self.bib_path = bib_path
-#
-#         with open(bib_path) as bib_file:
-#             bib_info = bibtexparser.load(bib_file)
-#
-#         keys = list(bib_info.entries_dict.keys())
-#         if len(keys) > 1:
-#             raise Exception('More than one entry in bibtex file.')
-#         self.key = keys[0]
-
-
-BUF_SIZE = 65536
-
-
-def hash_pdf(fname):
+def hash_pdf(pdf_path):
+    ''' Generate an MD5 hash of a PDF file. '''
     md5 = hashlib.md5()
 
-    with open(fname, 'rb') as f:
+    with open(pdf_path, 'rb') as f:
         while True:
-            data = f.read(BUF_SIZE)
+            data = f.read(HASH_FILE_BUFFER_SIZE)
             if not data:
                 break
             md5.update(data)
@@ -62,10 +39,12 @@ def hash_pdf(fname):
 
 
 def parse_pdf_text(pdf_path):
+    ''' Extract plaintext content of a PDF file. '''
     return textract.process(pdf_path).decode('utf-8')
 
 
 def key_from_bibtex(bib_path):
+    ''' Extract the document key from a bibtex file. '''
     with open(bib_path) as bib_file:
         bib_info = bibtexparser.load(bib_file)
 
@@ -76,74 +55,74 @@ def key_from_bibtex(bib_path):
     return keys[0]
 
 
+class DocumentPaths(object):
+    ''' Directory structure of a document in the archive. '''
+    def __init__(self, parent, key):
+        self.key_path = os.path.join(parent, key)
+        self.pdf_path = os.path.join(self.key_path, key + '.pdf')
+        self.bib_path = os.path.join(self.key_path, key + '.bib')
+
+        self.metadata_path = os.path.join(self.key_path, '.metadata')
+
+        self.hash_path = os.path.join(self.metadata_path, 'hash.md5')
+        self.text_path = os.path.join(self.metadata_path, 'text.txt')
+        self.accessed_path = os.path.join(self.metadata_path, 'accessed.txt')
+        self.added_path = os.path.join(self.metadata_path, 'added.txt')
+
+
 class ArchivalDocument(object):
     ''' A document in an archive. '''
     # path contains key
-    def __init__(self, path, key):
-        self.path = path
+    def __init__(self, key, paths):
         self.key = key
+        self.paths = paths
 
-        self.pdf_path = os.path.join(self.path, key + '.pdf')
-        self.bib_path = os.path.join(self.path, key + '.bib')
-
-        with open(self.bib_path) as f:
+        # Read the bibtex.
+        with open(self.paths.bib_path) as f:
             self.bibtex = f.read().strip()
 
-        def _read_date(fname):
-            metadata_path = os.path.join(self.key_path, '.metadata')
-            path = os.path.join(metadata_path, fname)
-            if os.path.exists(path):
-                with open(path) as f:
-                    date = f.read()
-                return datetime.date.strptime(date, '%Y-%m-%d')
-            else:
-                date = datetime.date.today()
-                with open(path, 'w') as f:
-                    f.write(date.isoformat())
-                return date
-
         # Dates.
-        self.added = _read_date('added.txt')
-        self.accessed = _read_date('accessed.txt')
+        self.added_date = self._read_date('added.txt')
+        self.accessed_date = self._read_date('accessed.txt')
+
+    def _read_date(self, fname):
+        path = os.path.join(self.paths.metadata_path, fname)
+        if os.path.exists(path):
+            with open(path) as f:
+                date = f.read()
+            return datetime.date.strptime(date, '%Y-%m-%d')
+        else:
+            date = datetime.date.today()
+            with open(path, 'w') as f:
+                f.write(date.isoformat())
+            return date
 
     def text(self):
         ''' Retrieve the plain text of the PDF file. '''
-        metadata_path = os.path.join(self.key_path, '.metadata')
-        hash_path = os.path.join(metadata_path, 'hash.md5')
-        text_path = os.path.join(metadata_path, 'text.txt')
+        current_hash = hash_pdf(self.paths.pdf_path)
 
-        current_hash = hash_pdf(self.pdf_path)
-        if os.path.exists(hash_path):
-            with open(hash_path) as f:
+        if os.path.exists(self.paths.hash_path):
+            with open(self.paths.hash_path) as f:
                 old_hash = f.read()
         else:
             old_hash = None
 
-        if (not os.path.exists(text_path) or not os.path.exists(hash_path)
+        if (not os.path.exists(self.paths.text_path)
+                or not os.path.exists(self.paths.hash_path)
                 or current_hash != old_hash):
             text = parse_pdf_text(self.pdf_path)
-            with open(hash_path, 'w') as f:
+            with open(self.paths.hash_path, 'w') as f:
                 f.write(current_hash)
-            with open(text_path, 'w') as f:
+            with open(self.paths.text_path, 'w') as f:
                 f.write(text)
 
         return text
 
     def access(self):
         ''' Update the access date to today. '''
-        self.accessed = datetime.date.today()
-        accessed_path = os.path.join(self.key_path, '.metadata', 'accessed.txt')
-        with open(accessed_path, 'w') as f:
+        self.accessed_date = datetime.date.today()
+        with open(self.paths.accessed_path, 'w') as f:
             f.write(self.accessed.isoformat())
-
-    def files(self):
-        ''' Convenient list of files. '''
-        # TODO is this needed?
-        return self.path, self.pdf_path, self.bib_path
-
-    @staticmethod
-    def load(archive, key):
-        return ArchivalDocument(os.path.join(archive.path, key), key)
 
 
 class Archive(object):
@@ -153,36 +132,57 @@ class Archive(object):
         self.path = path
 
     def add(self, pdf_path, bib_path):
+        ''' Create a new document in the archive. '''
         key = key_from_bibtex(bib_path)
 
         if self.contains(key):
             msg = 'Archive already contains key {}. Aborting.'.format(key)
             raise LibraryException(msg)
 
-        doc_path = os.path.join(self.path, key)
-        pdf_dest_path = os.path.join(doc_path, key + '.pdf')
-        bib_dest_path = os.path.join(doc_path, key + '.bib')
+        # Create document structure.
+        paths = DocumentPaths(self.path, key)
+        os.mkdir(paths.key_path)
+        os.mkdir(paths.metadata_path)
+        shutil.copy(pdf_path, paths.pdf_path)
+        shutil.copy(bib_path, paths.bib_path)
 
-        # Create directory and copy in PDF and bibtex files.
-        os.mkdir(doc_path)
-        os.mkdir(os.path.join(doc_path, '.metadata'))
-        shutil.copy(pdf_path, pdf_dest_path)
-        shutil.copy(bib_path, bib_dest_path)
+        return ArchivalDocument(key, paths)
 
-        return ArchivalDocument(doc_path, key)
+    def rekey(self, old_key, new_key):
+        ''' Rename a document in the archive. '''
+        old_paths = self.retrieve(old_key).paths
 
-    # TODO this should just be rekey, from below
-    def update(self, key, doc):
-        # Update doc pointed to by key with data from doc
-        pass
+        # If a new key has not been supplied, we take the key from the bibtex
+        # file.
+        if new_key is None:
+            new_key = key_from_bibtex(old_paths.bib_path)
 
-    def retrieve(self, key='*'):
+        if self.contains(new_key):
+            msg = 'Archive already contains key {}. Aborting.'.format(new_key)
+            raise LibraryException(msg)
+
+        new_paths = DocumentPaths(self.path, new_key)
+
+        shutil.move(old_paths.pdf_path, new_paths.pdf_path)
+        shutil.move(old_paths.bib_path, new_paths.bib_path)
+        shutil.move(old_paths.key_path, new_paths.key_path)
+
+        # Write the new_key to the bibtex file
+        with open(new_paths.bib_path, 'r+') as f:
+            bib_info = bibtexparser.load(f)
+            bib_info.entries[0]['ID'] = new_key
+            bib_writer = BibTexWriter()
+            f.write(bib_writer.write(bib_info))
+
+    def retrieve(self, key=None):
+        ''' Retrieve documents from the archive. '''
+        # If the key is a string, return the single document.
         if type(key) == str:
             if not self.contains(key):
                 raise Exception('Key {} not found in archive.'.format(key))
-            return ArchivalDocument(os.path.join(self.path, key), key)
+            return ArchivalDocument(self.path, key)
 
-        if key == '*':
+        if key is None:
             keys = os.listdir(self.path)
         else:
             keys = key
@@ -191,7 +191,9 @@ class Archive(object):
         for key in keys:
             if not self.contains(key):
                 raise Exception('Key {} not found in archive.'.format(key))
-            docs.append(ArchivalDocument(os.path.join(self.path, key), key))
+            paths = DocumentPaths(self.path, key)
+            doc = ArchivalDocument(key, paths)
+            docs.append(doc)
 
         return docs
 
@@ -199,46 +201,6 @@ class Archive(object):
         ''' Returns True if the key is in the archive, false otherwise. '''
         path = os.path.join(self.path, key)
         return os.path.isdir(path)
-
-    def has_key(self, key):
-        ''' Returns True if the key is in the archive, false otherwise. '''
-        path = os.path.join(self.path, key)
-        return os.path.isdir(path)
-
-    def all_keys(self):
-        ''' Returns a list of all keys in the archive. '''
-        return os.listdir(self.path)
-
-    def all_bibtex_files(self):
-        ''' Returns a list of paths of all bibtex files in the archive. '''
-        return glob.glob(self.path + '/**/*.bib')
-
-    def all_pdf_files(self):
-        ''' Returns a list of paths of all PDF files in the archive. '''
-        return glob.glob(self.path + '/**/*.pdf')
-
-    def key_path(self, key):
-        ''' Returns the path to the key. '''
-        return os.path.join(self.path, key)
-
-    def bib_path(self, key):
-        ''' Returns the path to the bibtex file of the key. '''
-        return os.path.join(self.key_path(key), key + '.bib')
-
-    def pdf_path(self, key):
-        ''' Returns the path to the PDF file of the key. '''
-        return os.path.join(self.key_path(key), key + '.pdf')
-
-    def pdf_to_key(self, pdf):
-        ''' Convert a PDF path to its key name. '''
-        base = os.path.basename(pdf)
-        return base.split('.')[0]
-
-    def pdfs():
-        pass
-
-    def keys():
-        pass
 
 
 class LibraryManager(object):
@@ -268,20 +230,9 @@ class LibraryManager(object):
                 message = '{} does not exist!'.format(self.paths[key])
                 raise LibraryException(message)
 
-    def bibtex_list(self):
-        ''' Create a list of the contents of all bibtex files in the archive. '''
-        bib_list = []
-        bib_files = self.archive.all_bibtex_files()
-
-        for bib_path in bib_files:
-            with open(bib_path) as bib_file:
-                bib_list.append(bib_file.read().strip())
-
-        return zip(bib_list, bib_files)
-
     def bibtex_dict(self, extra_customization=None):
         ''' Load bibtex information as a dictionary. '''
-        def customizations(record):
+        def _bibtex_customizations(record):
             record = customization.convert_to_unicode(record)
 
             # Make authors semicolon-separated rather than and-separated.
@@ -296,57 +247,35 @@ class LibraryManager(object):
         # resultant dictionaries together, so that we can handle malformed
         # bibtex files individually.
         entries_dict = {}
-        bibtex = self.bibtex_list()
-        for bibstr, bibfile in bibtex:
+        for doc in self.archive.retrieve():
+            bib_text = doc.bibtex
             # common_strings=True lets us parse the month field as "jan",
             # "feb", etc.
             parser = bibtexparser.bparser.BibTexParser(
-                    customization=customizations,
+                    customization=_bibtex_customizations,
                     common_strings=True)
             try:
-                d = bibtexparser.loads(bibstr, parser=parser).entries_dict
+                d = bibtexparser.loads(bib_text, parser=parser).entries_dict
             except:
-                print('Encountered an error while processing {}.'.format(bibfile))
+                bib_file = os.path.basename(doc.paths.bib_path)
+                print('Encountered an error while processing {}.'.format(bib_file))
                 continue
             entries_dict.update(d)
         return entries_dict
 
-    def add(self, key, pdf_src_path, bib_src_path):
-        key = parse_key(key)
+    def add(self, pdf_src_path, bib_src_path):
+        ''' Add a new document to the archive. Returns the document. '''
+        return self.archive.add(pdf_src_path, bib_src_path)
 
-        if self.archive.has_key(key):
-            message = 'Archive {} already exists! Aborting.'.format(key)
-            raise LibraryException(message)
-
-        os.mkdir(self.archive.key_path(key))
-
-        pdf_dest_path = self.archive.pdf_path(key)
-        bib_dest_path = self.archive.bib_path(key)
-
-        shutil.copy(pdf_src_path, pdf_dest_path)
-        shutil.copy(bib_src_path, bib_dest_path)
-
-    def rekey(self, key, new_key):
-        pdf_src_path = self.archive.pdf_path(key)
-        bib_src_path = self.archive.bib_path(key)
-
-        # First rename the PDF and bibtex files.
-        key_path = self.archive.key_path(key)
-        pdf_dest_path = os.path.join(key_path, new_key + '.pdf')
-        bib_dest_path = os.path.join(key_path, new_key + '.bib')
-
-        shutil.move(pdf_src_path, pdf_dest_path)
-        shutil.move(bib_src_path, bib_dest_path)
-
-        # Rename the directory.
-        new_key_path = self.archive.key_path(new_key)
-        shutil.move(key_path, new_key_path)
+    def rekey(self, old_key, new_key):
+        ''' Change the key of an existing document in the archive. '''
+        self.archive.rekey(old_key, new_key)
 
     def link(self, key, path):
-        key = parse_key(key)
+        ''' Create a symlink to a document in the archive. '''
         path = path if path is not None else key
 
-        src = self.archive.retrieve(key).path
+        src = self.archive.retrieve(key).paths.key_path
 
         if os.path.isabs(path):
             dest = path
@@ -359,7 +288,29 @@ class LibraryManager(object):
 
         os.symlink(src, dest)
 
+    def fix_link(self, link):
+        ''' Fix a link that has broken due to the library being moved. '''
+        if not os.path.islink(link):
+            raise LibraryException('{} is not a symlink.'.format(link))
+
+        key = os.path.basename(os.readlink(link))
+
+        if not self.archive.contains(key):
+            print('{} does not point to a document in the archive.'.format(link))
+            return 1
+
+        # Recreate the link, pointing to the correct location.
+        os.remove(link)
+        self.link(key, link)
+
+    def fix_links(self, directory):
+        ''' Fix all broken links in the directory. '''
+        files = os.listdir(directory)
+        for link in filter(os.path.islink, files):
+            self.fix_link(link)
+
     def bookmark(self, key, name):
+        ''' Create a bookmark 'name' pointing to the key. '''
         # Create the bookmarks directory if it doesn't already exist.
         if not os.path.isdir(self.paths['bookmarks']):
             os.mkdir(self.paths['bookmarks'])
