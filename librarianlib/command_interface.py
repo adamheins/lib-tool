@@ -32,7 +32,8 @@ class LibraryCommandInterface(object):
     def open(self, **kwargs):
         ''' Open a document for viewing. '''
         key = sanitize_key(kwargs['key'])
-        doc = self.manager.archive.retrieve(key)
+        doc = self.manager.get_doc(key)
+        doc.access()
         if kwargs['bib']:
             editor.edit(doc.paths.bib_path)
         else:
@@ -93,7 +94,7 @@ class LibraryCommandInterface(object):
 
     def compile(self, **kwargs):
         ''' Compile a single bibtex file and/or a single directory of PDFs. '''
-        docs = self.manager.archive.retrieve()
+        docs = self.manager.all_docs()
 
         # Compile all bibtex into a single file.
         if kwargs['bib']:
@@ -131,19 +132,17 @@ class LibraryCommandInterface(object):
 
     def where(self, **kwargs):
         ''' Print out library directories. '''
-        paths = self.manager.paths
-
         if kwargs['archive']:
-            print(paths['archive'])
+            print(self.manager.archive_path)
         elif kwargs['shelves']:
-            print(paths['shelves'])
+            print(self.manager.shelves_path)
         elif kwargs['bookmarks']:
-            if os.path.isdir(paths['bookmarks']):
-                print(paths['bookmarks'])
+            if os.path.isdir(self.manager.bookmarks_path):
+                print(self.manager.bookmarks_path)
             else:
                 return 1
         else:
-            print(paths['root'])
+            print(self.manager.path)
         return 0
 
     def bookmark(self, **kwargs):
@@ -155,7 +154,7 @@ class LibraryCommandInterface(object):
     def complete(self, **kwargs):
         ''' Print completions for commands. '''
         cmd = kwargs['cmd']
-        keys = [doc.key for doc in self.manager.archive.retrieve()]
+        keys = [doc.key for doc in self.manager.all_docs()]
 
         # Completion just for keys in the archive.
         if cmd == 'keys':
@@ -168,7 +167,7 @@ class LibraryCommandInterface(object):
                     return False
                 path = os.readlink(f)
                 key = sanitize_key(os.path.basename(path))
-                return self.manager.archive.contains(key)
+                return self.manager.has_key(key)
 
             # We also allow autocompletion of symlinks in the cwd
             files = os.listdir(os.getcwd())

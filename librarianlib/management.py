@@ -95,6 +95,10 @@ class ArchivalDocument(object):
         with open(self.paths.bib_path) as f:
             self.bibtex = f.read().strip()
 
+        # Sanity checks.
+        if not os.path.exists(self.paths.metadata_path):
+            os.mkdir(self.paths.metadata_path)
+
         # Dates.
         self.added_date = self._read_date('added.txt')
         self.accessed_date = self._read_date('accessed.txt')
@@ -104,12 +108,16 @@ class ArchivalDocument(object):
         if os.path.exists(path):
             with open(path) as f:
                 date = f.read()
-            return datetime.date.strptime(date, '%Y-%m-%d')
-        else:
-            date = datetime.date.today()
-            with open(path, 'w') as f:
-                f.write(date.isoformat())
-            return date
+            try:
+                return datetime.datetime.strptime(date, '%Y-%m-%d')
+            # Malformed date.
+            except ValueError:
+                pass
+
+        date = datetime.date.today()
+        with open(path, 'w') as f:
+            f.write(date.isoformat())
+        return date
 
     def text(self):
         ''' Retrieve the plain text of the PDF file. '''
@@ -121,14 +129,19 @@ class ArchivalDocument(object):
         else:
             old_hash = None
 
+        # If either the text or hash file is missing, or the old hash doesn't
+        # match the current hash, we must reparse the PDF.
         if (not os.path.exists(self.paths.text_path)
                 or not os.path.exists(self.paths.hash_path)
                 or current_hash != old_hash):
-            text = parse_pdf_text(self.pdf_path)
+            text = parse_pdf_text(self.paths.pdf_path)
             with open(self.paths.hash_path, 'w') as f:
                 f.write(current_hash)
             with open(self.paths.text_path, 'w') as f:
                 f.write(text)
+        else:
+            with open(self.paths.text_path) as f:
+                text = f.read()
 
         return text
 
@@ -136,7 +149,7 @@ class ArchivalDocument(object):
         ''' Update the access date to today. '''
         self.accessed_date = datetime.date.today()
         with open(self.paths.accessed_path, 'w') as f:
-            f.write(self.accessed.isoformat())
+            f.write(self.accessed_date.isoformat())
 
 
 class Archive(object):
@@ -194,7 +207,8 @@ class Archive(object):
         if type(key) == str:
             if not self.contains(key):
                 raise Exception('Key {} not found in archive.'.format(key))
-            return ArchivalDocument(self.path, key)
+            paths = DocumentPaths(self.path, key)
+            return ArchivalDocument(key, paths)
 
         if key is None:
             keys = os.listdir(self.path)
@@ -226,23 +240,44 @@ class LibraryManager(object):
         with open(config_file_path) as f:
             config = yaml.load(f)
 
-        self.root = os.path.expanduser(config['library'])
+        self.path = os.path.expanduser(config['library'])
+        self.archive_path = os.path.join(self.path, 'archive')
+        self.shelves_path = os.path.join(self.path, 'shelves')
+        self.bookmarks_path = os.path.join(self.path, 'bookmarks')
 
-        self.paths = {
-            'root': self.root,
-            'archive': os.path.join(self.root, 'archive'),
-            'shelves': os.path.join(self.root, 'shelves'),
-            'bookmarks': os.path.join(self.root, 'bookmarks'),
-        }
-
-        self.archive = Archive(self.paths['archive'])
+        # self.paths = {
+        #     'root': self.root,
+        #     'archive': os.path.join(self.root, 'archive'),
+        #     'shelves': os.path.join(self.root, 'shelves'),
+        #     'bookmarks': os.path.join(self.root, 'bookmarks'),
+        # }
+        #
+        # self.archive = Archive(self.paths['archive'])
 
         # Check if each of these directories exist.
-        # TODO perhaps just make the directory rather than raising an error
-        for key in ['root', 'archive', 'shelves']:
-            if not os.path.isdir(self.paths[key]):
-                message = '{} does not exist!'.format(self.paths[key])
-                raise LibraryException(message)
+        for path in [self.path, self.archive_path, self.shelves_path]:
+            if not os.path.isdir(path):
+                msg = '{} does not exist!'.format(path)
+                raise LibraryException(msg)
+
+    def has_key(self, key):
+        ''' Returns True if the key is in the archive, false otherwise. '''
+        return os.path.isdir(os.path.join(self.archive_path, key))
+
+    def all_docs(self):
+        ''' Return all documents in the library. '''
+        docs = []
+        for key in os.listdir(self.archive_path):
+            paths = DocumentPaths(self.archive_path, key)
+            docs.append(ArchivalDocument(key, paths))
+        return docs
+
+    def get_doc(self, key):
+        ''' Return a single document from the library. '''
+        if not self.has_key(key):
+            raise Exception('Key {} not found in archive.'.format(key))
+        paths = DocumentPaths(self.archive_path, key)
+        return ArchivalDocument(key, paths)
 
     def bibtex_dict(self, extra_customization=None):
         ''' Load bibtex information as a dictionary. '''
@@ -261,7 +296,7 @@ class LibraryManager(object):
         # resultant dictionaries together, so that we can handle malformed
         # bibtex files individually.
         entries_dict = {}
-        for doc in self.archive.retrieve():
+        for doc in self.all_docs():
             bib_text = doc.bibtex
             # common_strings=True lets us parse the month field as "jan",
             # "feb", etc.
@@ -279,17 +314,52 @@ class LibraryManager(object):
 
     def add(self, pdf_src_path, bib_src_path):
         ''' Add a new document to the archive. Returns the document. '''
-        return self.archive.add(pdf_src_path, bib_src_path)
+        key = key_from_bibtex(bib_src_path)
+
+        if self.has_key(key):
+            msg = 'Archive already contains key {}. Aborting.'.format(key)
+            raise LibraryException(msg)
+
+        # Create document structure.
+        paths = DocumentPaths(self.archive_path, key)
+        os.mkdir(paths.key_path)
+        os.mkdir(paths.metadata_path)
+        shutil.copy(pdf_src_path, paths.pdf_path)
+        shutil.copy(bib_src_path, paths.bib_path)
+
+        return ArchivalDocument(key, paths)
 
     def rekey(self, old_key, new_key):
         ''' Change the key of an existing document in the archive. '''
-        self.archive.rekey(old_key, new_key)
+        old_paths = self.get_doc(old_key).paths
+
+        # If a new key has not been supplied, we take the key from the bibtex
+        # file.
+        if new_key is None:
+            new_key = key_from_bibtex(old_paths.bib_path)
+
+        if self.has_key(new_key):
+            msg = 'Archive already contains key {}. Aborting.'.format(new_key)
+            raise LibraryException(msg)
+
+        new_paths = DocumentPaths(self.archive_path, new_key)
+
+        shutil.move(old_paths.pdf_path, new_paths.pdf_path)
+        shutil.move(old_paths.bib_path, new_paths.bib_path)
+        shutil.move(old_paths.key_path, new_paths.key_path)
+
+        # Write the new_key to the bibtex file
+        with open(new_paths.bib_path, 'r+') as f:
+            bib_info = bibtexparser.load(f)
+            bib_info.entries[0]['ID'] = new_key
+            bib_writer = BibTexWriter()
+            f.write(bib_writer.write(bib_info))
 
     def link(self, key, path):
         ''' Create a symlink to a document in the archive. '''
         path = path if path is not None else key
 
-        src = self.archive.retrieve(key).paths.key_path
+        src = self.get_doc(key).paths.key_path
 
         if os.path.isabs(path):
             dest = path
@@ -309,7 +379,7 @@ class LibraryManager(object):
 
         key = os.path.basename(os.readlink(link))
 
-        if not self.archive.contains(key):
+        if not self.has_key(key):
             print('{} does not point to a document in the archive.'.format(link))
             return 1
 
@@ -326,12 +396,12 @@ class LibraryManager(object):
     def bookmark(self, key, name):
         ''' Create a bookmark 'name' pointing to the key. '''
         # Create the bookmarks directory if it doesn't already exist.
-        if not os.path.isdir(self.paths['bookmarks']):
-            os.mkdir(self.paths['bookmarks'])
-            print('Created bookmarks directory at: {}'.format(self.paths['bookmarks']))
+        if not os.path.isdir(self.bookmarks_path):
+            os.mkdir(self.self.bookmarks_path)
+            print('Created bookmarks directory at: {}'.format(self.bookmarks_path))
 
         name = name if name is not None else key
-        path = os.path.join(self.paths['bookmarks'], name)
+        path = os.path.join(self.bookmarks_path, name)
         self.link(key, path)
 
     def search_text(self, regex, oneline, verbose=False):
@@ -339,7 +409,7 @@ class LibraryManager(object):
         # We assume that we want to search the whole corpus. For single
         # document searches, open the doc in a PDF viewer.
         results = []
-        for doc in self.archive.retrieve():
+        for doc in self.all_docs():
             text = doc.text()
             count = len(regex.findall(text))
             if count > 0:
