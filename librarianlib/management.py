@@ -16,7 +16,7 @@ from . import style
 HASH_FILE_BUFFER_SIZE = 65536
 
 
-def find_config(search_dirs, config_name):
+def _find_config(search_dirs, config_name):
     ''' Find the path to the configuration file. '''
     for search_dir in search_dirs:
         path = os.path.join(search_dir, config_name)
@@ -25,7 +25,7 @@ def find_config(search_dirs, config_name):
     return None
 
 
-def hash_pdf(pdf_path):
+def _hash_pdf(pdf_path):
     ''' Generate an MD5 hash of a PDF file. '''
     md5 = hashlib.md5()
 
@@ -39,9 +39,17 @@ def hash_pdf(pdf_path):
     return md5.hexdigest()
 
 
-def parse_pdf_text(pdf_path):
+def _parse_pdf_text(pdf_path):
     ''' Extract plaintext content of a PDF file. '''
-    return textract.process(pdf_path).decode('utf-8')
+    # Try using pdftotext and fallback to pdfminer if that doesn't work.
+    try:
+        text = textract.process(pdf_path, method='pdftotext')
+    except (TypeError, UnicodeDecodeError):
+        try:
+            text = textract.process(pdf_path, method='pdfminer')
+        except (TypeError, UnicodeDecodeError, textract.exceptions.ShellError):
+            return None
+    return text.decode('utf-8')
 
 
 def key_from_bibtex(bib_path):
@@ -120,8 +128,9 @@ class ArchivalDocument(object):
         return date
 
     def text(self):
-        ''' Retrieve the plain text of the PDF file. '''
-        current_hash = hash_pdf(self.paths.pdf_path)
+        ''' Retrieve the plain text of the PDF file.
+            Returns a tuple (text, new) : (str, bool)'''
+        current_hash = _hash_pdf(self.paths.pdf_path)
 
         if os.path.exists(self.paths.hash_path):
             with open(self.paths.hash_path) as f:
@@ -134,16 +143,24 @@ class ArchivalDocument(object):
         if (not os.path.exists(self.paths.text_path)
                 or not os.path.exists(self.paths.hash_path)
                 or current_hash != old_hash):
-            text = parse_pdf_text(self.paths.pdf_path)
+            new = True
+            text = _parse_pdf_text(self.paths.pdf_path)
+
+            # Save the hash.
             with open(self.paths.hash_path, 'w') as f:
                 f.write(current_hash)
-            with open(self.paths.text_path, 'w') as f:
-                f.write(text)
+
+            # TODO it may be worth saving an indication of failure so as to
+            # avoid reparsing all the time
+            if text is not None:
+                with open(self.paths.text_path, 'w') as f:
+                    f.write(text)
         else:
+            new = False
             with open(self.paths.text_path) as f:
                 text = f.read()
 
-        return text
+        return text, new
 
     def access(self):
         ''' Update the access date to today. '''
@@ -152,88 +169,9 @@ class ArchivalDocument(object):
             f.write(self.accessed_date.isoformat())
 
 
-class Archive(object):
-    ''' Provides convenience functions to interact with the library's archive.
-        '''
-    def __init__(self, path):
-        self.path = path
-
-    def add(self, pdf_path, bib_path):
-        ''' Create a new document in the archive. '''
-        key = key_from_bibtex(bib_path)
-
-        if self.contains(key):
-            msg = 'Archive already contains key {}. Aborting.'.format(key)
-            raise LibraryException(msg)
-
-        # Create document structure.
-        paths = DocumentPaths(self.path, key)
-        os.mkdir(paths.key_path)
-        os.mkdir(paths.metadata_path)
-        shutil.copy(pdf_path, paths.pdf_path)
-        shutil.copy(bib_path, paths.bib_path)
-
-        return ArchivalDocument(key, paths)
-
-    def rekey(self, old_key, new_key):
-        ''' Rename a document in the archive. '''
-        old_paths = self.retrieve(old_key).paths
-
-        # If a new key has not been supplied, we take the key from the bibtex
-        # file.
-        if new_key is None:
-            new_key = key_from_bibtex(old_paths.bib_path)
-
-        if self.contains(new_key):
-            msg = 'Archive already contains key {}. Aborting.'.format(new_key)
-            raise LibraryException(msg)
-
-        new_paths = DocumentPaths(self.path, new_key)
-
-        shutil.move(old_paths.pdf_path, new_paths.pdf_path)
-        shutil.move(old_paths.bib_path, new_paths.bib_path)
-        shutil.move(old_paths.key_path, new_paths.key_path)
-
-        # Write the new_key to the bibtex file
-        with open(new_paths.bib_path, 'r+') as f:
-            bib_info = bibtexparser.load(f)
-            bib_info.entries[0]['ID'] = new_key
-            bib_writer = BibTexWriter()
-            f.write(bib_writer.write(bib_info))
-
-    def retrieve(self, key=None):
-        ''' Retrieve documents from the archive. '''
-        # If the key is a string, return the single document.
-        if type(key) == str:
-            if not self.contains(key):
-                raise Exception('Key {} not found in archive.'.format(key))
-            paths = DocumentPaths(self.path, key)
-            return ArchivalDocument(key, paths)
-
-        if key is None:
-            keys = os.listdir(self.path)
-        else:
-            keys = key
-
-        docs = []
-        for key in keys:
-            if not self.contains(key):
-                raise Exception('Key {} not found in archive.'.format(key))
-            paths = DocumentPaths(self.path, key)
-            doc = ArchivalDocument(key, paths)
-            docs.append(doc)
-
-        return docs
-
-    def contains(self, key):
-        ''' Returns True if the key is in the archive, false otherwise. '''
-        path = os.path.join(self.path, key)
-        return os.path.isdir(path)
-
-
 class LibraryManager(object):
     def __init__(self, search_dirs, config_name):
-        config_file_path = find_config(search_dirs, config_name)
+        config_file_path = _find_config(search_dirs, config_name)
         if config_file_path is None:
             raise LibraryException('Could not find config file.')
 
@@ -244,15 +182,6 @@ class LibraryManager(object):
         self.archive_path = os.path.join(self.path, 'archive')
         self.shelves_path = os.path.join(self.path, 'shelves')
         self.bookmarks_path = os.path.join(self.path, 'bookmarks')
-
-        # self.paths = {
-        #     'root': self.root,
-        #     'archive': os.path.join(self.root, 'archive'),
-        #     'shelves': os.path.join(self.root, 'shelves'),
-        #     'bookmarks': os.path.join(self.root, 'bookmarks'),
-        # }
-        #
-        # self.archive = Archive(self.paths['archive'])
 
         # Check if each of these directories exist.
         for path in [self.path, self.archive_path, self.shelves_path]:
@@ -410,7 +339,16 @@ class LibraryManager(object):
         # document searches, open the doc in a PDF viewer.
         results = []
         for doc in self.all_docs():
-            text = doc.text()
+            # Some PDFs have bizarre encodings on which textract fails. For now
+            # we just silently ignore such failures and don't do text search on
+            # these.
+            text, new = doc.text()
+            if text is None:
+                print('Failed to parse {}.'.format(doc.key))
+                continue
+            elif new:
+                print('Successfully parsed {}.'.format(doc.key))
+
             count = len(regex.findall(text))
             if count > 0:
                 results.append({'key': doc.key, 'count': count, 'detail': ''})
