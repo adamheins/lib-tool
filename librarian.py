@@ -55,9 +55,15 @@ def parse_args(cmd_interface):
     browse_parser.add_argument('--title')
     browse_parser.add_argument('--year')
     browse_parser.add_argument('--venue')
-    browse_parser.add_argument('--sort', choices=['key', 'title', 'year', 'age', 'recent'])
-    browse_parser.add_argument('-n', '--number', type=int)
-    browse_parser.add_argument('-v', '--verbose', action='store_true')
+    browse_parser.add_argument('-s', '--sort',
+                               choices=['key', 'title', 'year', 'added', 'recent'],
+                               help='Sort the results.')
+    browse_parser.add_argument('-n', '--number', type=int,
+                               help='Limit the number of results.')
+    browse_parser.add_argument('-v', '--verbose', action='count',
+                               help='Specify verbosity.')
+    browse_parser.add_argument('-r', '--reverse', action='store_true',
+                               help='Reverse sorting order.')
     browse_parser.set_defaults(func=cmd_interface.browse)
 
     # Add parser.

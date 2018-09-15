@@ -85,12 +85,12 @@ class LibraryCommandInterface(object):
         venue = kwargs['venue']
         sort = kwargs['sort']
         number = kwargs['number']
+        reverse = kwargs['reverse']
+        verbosity = kwargs['verbose'] if kwargs['verbose'] else 0
 
-        verbosity = 0
-        if kwargs['verbose']:
-            verbosity = 1
-
-        self.manager.search_docs(key, title, author, year, venue, sort, number,
+        self.manager.search_docs(key=key, title=title, author=author,
+                                 year=year, venue=venue, sort=sort,
+                                 number=number, reverse=reverse,
                                  verbosity=verbosity)
         # TODO need to be able to search for particular fields
 

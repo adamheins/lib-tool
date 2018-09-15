@@ -39,16 +39,6 @@ def _parse_pdf_text(pdf_path):
     return text.decode('utf-8')
 
 
-class DocumentFilter(object):
-    def __init__(self, key=None, title=None, author=None, year=None,
-                 venue=None):
-        self.key = key
-        self.title = title
-        self.author = author
-        self.year = year
-        self.venue = venue
-
-
 class DocumentPaths(object):
     ''' Directory structure of a document in the archive. '''
     def __init__(self, parent, key):
@@ -64,17 +54,17 @@ class DocumentPaths(object):
         self.added_path = os.path.join(self.metadata_path, 'added.txt')
 
 
-def _bibtex_customizations(record):
-    ''' Customizations to apply to bibtex record. '''
-    record = bibtexparser.customization.convert_to_unicode(record)
+# def _bibtex_customizations(record):
+#     ''' Customizations to apply to bibtex record. '''
+#     record = bibtexparser.customization.convert_to_unicode(record)
+#
+#     # Make authors semicolon-separated rather than and-separated.
+#     # record['author'] = record['author'].replace(' and', ';')
+#
+#     return record
 
-    # Make authors semicolon-separated rather than and-separated.
-    record['author'] = record['author'].replace(' and', ';')
 
-    return record
-
-
-def _parse_bibtex(bib_path):
+def _load_bibtex(bib_path):
     ''' Load bibtex information as a dictionary. '''
 
     with open(bib_path) as f:
@@ -83,13 +73,46 @@ def _parse_bibtex(bib_path):
     # common_strings=True lets us parse the month field as "jan",
     # "feb", etc.
     parser = bibtexparser.bparser.BibTexParser(
-            customization=_bibtex_customizations,
+            customization=bibtexparser.customization.convert_to_unicode,
             common_strings=True)
     try:
-        return bibtexparser.loads(text, parser=parser).entries_dict
+        bibtex = bibtexparser.loads(text, parser=parser).entries_dict
     except:
         msg = 'Encountered an error while processing {}.'.format(bib_path)
         raise LibraryException(msg)
+
+    key = list(bibtex.keys())[0]
+    return bibtex[key]
+
+
+def _parse_bibtex(bibtex):
+    ''' Parse the bibtex. All documents must have at least a title, author, and
+        year. '''
+    key = bibtex['ID']
+
+    try:
+        title = bibtex['title']
+    except KeyError:
+        raise LibraryException('No title field in bibtex of {}.'.format(key))
+
+    try:
+        authors = bibtex['author'].split(' and ')
+    except KeyError:
+        raise LibraryException('No author field in bibtex of {}.'.format(key))
+
+    try:
+        year = bibtex['year']
+    except KeyError:
+        raise LibraryException('No year field in bibtex of {}.'.format(key))
+
+    if 'journal' in bibtex:
+        venue = bibtex['journal']
+    elif 'booktitle' in bibtex:
+        venue = bibtex['booktitle']
+    else:
+        venue = None
+
+    return title, authors, year, venue
 
 
 class ArchivalDocument(object):
@@ -99,7 +122,8 @@ class ArchivalDocument(object):
         self.key = key
         self.paths = paths
 
-        self.bibtex = _parse_bibtex(paths.bib_path)[self.key]
+        self.bibtex = _load_bibtex(paths.bib_path)
+        self.title, self.authors, self.year, self.venue = _parse_bibtex(self.bibtex)
 
         # Sanity checks.
         if not os.path.exists(self.paths.metadata_path):
@@ -166,40 +190,38 @@ class ArchivalDocument(object):
         with open(self.paths.accessed_path, 'w') as f:
             f.write(self.accessed_date.isoformat())
 
-    def matches(self, key=None, title=None, author=None, year=None,
-                venue=None):
+    def matches(self, key_pattern=None, title_pattern=None,
+                author_pattern=None, year_pattern=None, venue_pattern=None):
         ''' Return True if the document matches the patterns supplied for key,
             title, author, year, and venue. False otherwise. '''
-        if key and not re.search(key, self.key, re.IGNORECASE):
+        if key_pattern and not re.search(key_pattern, self.key, re.IGNORECASE):
             return False
 
-        if title and not re.search(title, self.bibtex['title'], re.IGNORECASE):
+        if title_pattern and not re.search(title_pattern, self.title,
+                                           re.IGNORECASE):
             return False
 
         # Author can be a space-separated list.
-        if author:
-            for word in author.split(' '):
-                if not re.search(word, self.bibtex['author'], re.IGNORECASE):
+        if author_pattern:
+            for author in author_pattern.split(' '):
+                if not re.search(author, ' '.join(self.authors),
+                                 re.IGNORECASE):
                     return False
 
         # Year can be a single number or a range NNNN-NNNN.
-        if year:
-            if '-' in year:
-                years = year.split('-')
+        if year_pattern:
+            if '-' in year_pattern:
+                years = year_pattern.split('-')
                 first = int(years[0])
                 last  = int(years[1])
                 years = list(range(first, last + 1))
-                if int(self.bibtex['year']) not in years:
+                if int(self.year) not in years:
                     return False
-            elif year != self.bibtex['year']:
+            elif year_pattern != self.year:
                 return False
 
-        if venue:
-            if 'booktitle' in self.bibtex:
-                if not re.search(venue, self.bibtex['booktitle'], re.IGNORECASE):
-                    return False
-            if 'journal' in self.bibtex:
-                if not re.search(venue, self.bibtex['journal'],
-                                 re.IGNORECASE):
-                    return False
+        if venue_pattern:
+            if not self.venue or not re.search(venue_pattern, self.venue,
+                                               re.IGNORECASE):
+                return False
         return True

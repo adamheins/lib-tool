@@ -1,11 +1,12 @@
 # Built-in.
 import os
 import shutil
+import sys
+import textwrap
 import yaml
 
 # Third party.
 import bibtexparser
-import bibtexparser.customization as customization
 from bibtexparser.bwriter import BibTexWriter
 
 # Ours.
@@ -49,13 +50,26 @@ def _match_highlighter(match):
 
 
 def _summarize_doc(doc, verbosity):
-    if verbosity == 0:
-        return doc.key
-    elif verbosity == 1:
-        tmpl = '{title}, {year} ({key})\n{author}'
-        return tmpl.format(title=style.bold(doc.bibtex['title']),
-                           year=doc.bibtex['year'], key=doc.key,
-                           author=doc.bibtex['author'])
+    ''' Create a string summary of a document. '''
+    if verbosity == 1:
+        tmpl = '{title}\n{year} ({key})\n{author}'
+    elif verbosity == 2:
+        if doc.venue:
+            tmpl = '{title}\n{year} ({key})\n{author}\n{venue}'
+        else:
+            tmpl = '{title}\n{year} ({key})\n{author}'
+    else:
+        tmpl = '{key}'
+
+    # Wrap the title at 80 chars.
+    title = textwrap.fill(doc.title, width=80)
+
+    # Only apply styling if output is a terminal.
+    if sys.stdout.isatty():
+        title = style.bold(title)
+
+    return tmpl.format(title=title, year=doc.year, key=doc.key,
+                       author='; '.join(doc.authors), venue=doc.venue)
 
 
 class LibraryManager(object):
@@ -102,38 +116,38 @@ class LibraryManager(object):
         paths = DocumentPaths(self.archive_path, key)
         return ArchivalDocument(key, paths)
 
-    def bibtex_dict(self, extra_customization=None):
-        ''' Load bibtex information as a dictionary. '''
-        def _bibtex_customizations(record):
-            record = customization.convert_to_unicode(record)
-
-            # Make authors semicolon-separated rather than and-separated.
-            record['author'] = record['author'].replace(' and', ';')
-
-            # Apply extra customization function is applicable.
-            if extra_customization:
-                record = extra_customization(record)
-            return record
-
-        # We parse each string of bibtex separately and then merge the
-        # resultant dictionaries together, so that we can handle malformed
-        # bibtex files individually.
-        entries_dict = {}
-        for doc in self.all_docs():
-            bib_text = doc.bibtex
-            # common_strings=True lets us parse the month field as "jan",
-            # "feb", etc.
-            parser = bibtexparser.bparser.BibTexParser(
-                    customization=_bibtex_customizations,
-                    common_strings=True)
-            try:
-                d = bibtexparser.loads(bib_text, parser=parser).entries_dict
-            except:
-                bib_file = os.path.basename(doc.paths.bib_path)
-                print('Encountered an error while processing {}.'.format(bib_file))
-                continue
-            entries_dict.update(d)
-        return entries_dict
+    # def bibtex_dict(self, extra_customization=None):
+    #     ''' Load bibtex information as a dictionary. '''
+    #     def _bibtex_customizations(record):
+    #         record = customization.convert_to_unicode(record)
+    #
+    #         # Make authors semicolon-separated rather than and-separated.
+    #         record['author'] = record['author'].replace(' and', ';')
+    #
+    #         # Apply extra customization function is applicable.
+    #         if extra_customization:
+    #             record = extra_customization(record)
+    #         return record
+    #
+    #     # We parse each string of bibtex separately and then merge the
+    #     # resultant dictionaries together, so that we can handle malformed
+    #     # bibtex files individually.
+    #     entries_dict = {}
+    #     for doc in self.all_docs():
+    #         bib_text = doc.bibtex
+    #         # common_strings=True lets us parse the month field as "jan",
+    #         # "feb", etc.
+    #         parser = bibtexparser.bparser.BibTexParser(
+    #                 customization=_bibtex_customizations,
+    #                 common_strings=True)
+    #         try:
+    #             d = bibtexparser.loads(bib_text, parser=parser).entries_dict
+    #         except:
+    #             bib_file = os.path.basename(doc.paths.bib_path)
+    #             print('Encountered an error while processing {}.'.format(bib_file))
+    #             continue
+    #         entries_dict.update(d)
+    #     return entries_dict
 
     def add(self, pdf_src_path, bib_src_path):
         ''' Add a new document to the archive. Returns the document. '''
@@ -288,7 +302,8 @@ class LibraryManager(object):
                 results.append({'key': key, 'count': count, 'detail': detail})
 
     def search_docs(self, key=None, title=None, author=None, year=None,
-                    venue=None, sort=None, number=None, verbosity=0):
+                    venue=None, sort=None, number=None, reverse=False,
+                    verbosity=0):
         # Find documents matching the criteria.
         docs = []
         for doc in self.all_docs():
@@ -304,16 +319,16 @@ class LibraryManager(object):
                     return doc.bibtex['title'].lower()
                 if sort == 'year':
                     return doc.bibtex['year']
-                if sort == 'age':
+                if sort == 'added':
                     return doc.added_date
                 if sort == 'recent':
                     return doc.accessed_date
                 return doc.bibtex['year']
 
             if sort in ['key', 'title']:
-                docs = sorted(docs, key=_doc_sort_key)
+                docs = sorted(docs, key=_doc_sort_key, reverse=reverse)
             else:
-                docs = sorted(docs, key=_doc_sort_key, reverse=True)
+                docs = sorted(docs, key=_doc_sort_key, reverse=not reverse)
 
         # Limit the number of results.
         if number:
