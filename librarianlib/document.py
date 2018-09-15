@@ -54,14 +54,35 @@ class DocumentPaths(object):
         self.added_path = os.path.join(self.metadata_path, 'added.txt')
 
 
-# def _bibtex_customizations(record):
-#     ''' Customizations to apply to bibtex record. '''
-#     record = bibtexparser.customization.convert_to_unicode(record)
-#
-#     # Make authors semicolon-separated rather than and-separated.
-#     # record['author'] = record['author'].replace(' and', ';')
-#
-#     return record
+def _bibtex_customizations(record):
+    ''' Customizations to apply to bibtex record. '''
+    record = bibtexparser.customization.convert_to_unicode(record)
+
+    # Make author names more consistent.
+    # TODO I would like to embrace the paradigm that this tool is not
+    # responsible for formatting your bibtex files.
+    names = record['author'].split(' and ')
+    authors = []
+    for name in names:
+        # Change order to: first middle last
+        if ',' in name:
+            parts = name.split(',')
+            parts.reverse()
+            name = ' '.join(parts)
+
+        subnames = name.split()
+        name = []
+        for subname in subnames:
+            if subname.isupper():
+                subname = subname.replace('.', '')
+                for c in subname:
+                    name.append(c + '.')
+            else:
+                name.append(subname)
+        authors.append(' '.join(name))
+    record['author'] = ' and '.join(authors)
+
+    return record
 
 
 def _load_bibtex(bib_path):
@@ -73,7 +94,7 @@ def _load_bibtex(bib_path):
     # common_strings=True lets us parse the month field as "jan",
     # "feb", etc.
     parser = bibtexparser.bparser.BibTexParser(
-            customization=bibtexparser.customization.convert_to_unicode,
+            customization=_bibtex_customizations,
             common_strings=True)
     try:
         bibtex = bibtexparser.loads(text, parser=parser).entries_dict

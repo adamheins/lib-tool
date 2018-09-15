@@ -112,6 +112,7 @@ class LibraryCommandInterface(object):
         docs = self.manager.all_docs()
 
         # Compile all bibtex into a single file.
+        # TODO need to use a bibtex string field here
         if kwargs['bib']:
             bibtex = '\n\n'.join([doc.bibtex for doc in docs])
             with open('bibtex.bib', 'w') as f:
