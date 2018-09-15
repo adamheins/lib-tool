@@ -302,12 +302,12 @@ class LibraryManager(object):
                 results.append({'key': key, 'count': count, 'detail': detail})
 
     def search_docs(self, key=None, title=None, author=None, year=None,
-                    venue=None, sort=None, number=None, reverse=False,
-                    verbosity=0):
+                    venue=None, entrytype=None, sort=None, number=None,
+                    reverse=False, verbosity=0):
         # Find documents matching the criteria.
         docs = []
         for doc in self.all_docs():
-            if doc.matches(key, title, author, year, venue):
+            if doc.matches(key, title, author, year, venue, entrytype):
                 docs.append(doc)
 
         # Sort the matching documents.

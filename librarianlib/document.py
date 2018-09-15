@@ -103,13 +103,14 @@ def _load_bibtex(bib_path):
         raise LibraryException(msg)
 
     key = list(bibtex.keys())[0]
-    return bibtex[key]
+    return bibtex[key], text
 
 
 def _parse_bibtex(bibtex):
     ''' Parse the bibtex. All documents must have at least a title, author, and
         year. '''
     key = bibtex['ID']
+    entrytype = bibtex['ENTRYTYPE']
 
     try:
         title = bibtex['title']
@@ -126,14 +127,14 @@ def _parse_bibtex(bibtex):
     except KeyError:
         raise LibraryException('No year field in bibtex of {}.'.format(key))
 
-    if 'journal' in bibtex:
+    if entrytype == 'journal':
         venue = bibtex['journal']
-    elif 'booktitle' in bibtex:
+    elif entrytype == 'inproceedings':
         venue = bibtex['booktitle']
     else:
         venue = None
 
-    return title, authors, year, venue
+    return title, authors, year, venue, entrytype
 
 
 class ArchivalDocument(object):
@@ -143,8 +144,9 @@ class ArchivalDocument(object):
         self.key = key
         self.paths = paths
 
-        self.bibtex = _load_bibtex(paths.bib_path)
-        self.title, self.authors, self.year, self.venue = _parse_bibtex(self.bibtex)
+        self.bibtex, self.bibtex_str = _load_bibtex(paths.bib_path)
+        info = _parse_bibtex(self.bibtex)
+        self.title, self.authors, self.year, self.venue, self.entrytype = info
 
         # Sanity checks.
         if not os.path.exists(self.paths.metadata_path):
@@ -212,7 +214,8 @@ class ArchivalDocument(object):
             f.write(self.accessed_date.isoformat())
 
     def matches(self, key_pattern=None, title_pattern=None,
-                author_pattern=None, year_pattern=None, venue_pattern=None):
+                author_pattern=None, year_pattern=None, venue_pattern=None,
+                entrytype_pattern=None):
         ''' Return True if the document matches the patterns supplied for key,
             title, author, year, and venue. False otherwise. '''
         if key_pattern and not re.search(key_pattern, self.key, re.IGNORECASE):
@@ -245,4 +248,10 @@ class ArchivalDocument(object):
             if not self.venue or not re.search(venue_pattern, self.venue,
                                                re.IGNORECASE):
                 return False
+
+        # Entry type is a simple field so we just do a simple substring check.
+        if entrytype_pattern:
+            if entrytype_pattern not in self.entrytype:
+                return False
+
         return True

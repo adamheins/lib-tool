@@ -55,6 +55,7 @@ def parse_args(cmd_interface):
     browse_parser.add_argument('--title')
     browse_parser.add_argument('--year')
     browse_parser.add_argument('--venue')
+    browse_parser.add_argument('--type')
     browse_parser.add_argument('-s', '--sort',
                                choices=['key', 'title', 'year', 'added', 'recent'],
                                help='Sort the results.')

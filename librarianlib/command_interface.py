@@ -78,19 +78,23 @@ class LibraryCommandInterface(object):
             print(text_results)
 
     def browse(self, **kwargs):
+        # Filters.
         author = kwargs['author']
         year = kwargs['year']
         title = kwargs['title']
         key = kwargs['key']
         venue = kwargs['venue']
+        entrytype = kwargs['type']
+
+        # Display options.
         sort = kwargs['sort']
         number = kwargs['number']
         reverse = kwargs['reverse']
         verbosity = kwargs['verbose'] if kwargs['verbose'] else 0
 
         self.manager.search_docs(key=key, title=title, author=author,
-                                 year=year, venue=venue, sort=sort,
-                                 number=number, reverse=reverse,
+                                 year=year, venue=venue, entrytype=entrytype,
+                                 sort=sort, number=number, reverse=reverse,
                                  verbosity=verbosity)
         # TODO need to be able to search for particular fields
 
@@ -112,9 +116,8 @@ class LibraryCommandInterface(object):
         docs = self.manager.all_docs()
 
         # Compile all bibtex into a single file.
-        # TODO need to use a bibtex string field here
         if kwargs['bib']:
-            bibtex = '\n\n'.join([doc.bibtex for doc in docs])
+            bibtex = '\n\n'.join([doc.bibtex_str for doc in docs])
             with open('bibtex.bib', 'w') as f:
                 f.write(bibtex)
             print('Compiled bibtex files to bibtex.bib.')
