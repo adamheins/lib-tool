@@ -47,6 +47,19 @@ def parse_args(cmd_interface):
                              help='Case sensitive search.')
     grep_parser.set_defaults(func=cmd_interface.grep)
 
+    # Browse parser.
+    browse_parser = subparsers.add_parser('browse',
+                                        help='Filter documents.')
+    browse_parser.add_argument('--key')
+    browse_parser.add_argument('--author')
+    browse_parser.add_argument('--title')
+    browse_parser.add_argument('--year')
+    browse_parser.add_argument('--venue')
+    browse_parser.add_argument('--sort', choices=['key', 'title', 'year', 'age', 'recent'])
+    browse_parser.add_argument('-n', '--number', type=int)
+    browse_parser.add_argument('-v', '--verbose', action='store_true')
+    browse_parser.set_defaults(func=cmd_interface.browse)
+
     # Add parser.
     add_parser = subparsers.add_parser(
             'add',

@@ -3,8 +3,6 @@ import re
 import shutil
 import subprocess
 
-import bibtexparser
-from bibtexparser.bwriter import BibTexWriter
 import editor
 
 from librarianlib import index
@@ -78,6 +76,23 @@ class LibraryCommandInterface(object):
             text_results = self.manager.search_text(regex, kwargs['oneline'],
                                                     verbose=True)
             print(text_results)
+
+    def browse(self, **kwargs):
+        author = kwargs['author']
+        year = kwargs['year']
+        title = kwargs['title']
+        key = kwargs['key']
+        venue = kwargs['venue']
+        sort = kwargs['sort']
+        number = kwargs['number']
+
+        verbosity = 0
+        if kwargs['verbose']:
+            verbosity = 1
+
+        self.manager.search_docs(key, title, author, year, venue, sort, number,
+                                 verbosity=verbosity)
+        # TODO need to be able to search for particular fields
 
     def index(self, **kwargs):
         ''' Create an index file with links and information for easy browsing.
@@ -154,7 +169,7 @@ class LibraryCommandInterface(object):
     def complete(self, **kwargs):
         ''' Print completions for commands. '''
         cmd = kwargs['cmd']
-        keys = [doc.key for doc in self.manager.all_docs()]
+        keys = self.manager.all_keys()
 
         # Completion just for keys in the archive.
         if cmd == 'keys':
@@ -162,7 +177,7 @@ class LibraryCommandInterface(object):
 
         # Completion for keys as well as symlinks that point to keys.
         elif cmd == 'keys-and-links':
-            def link_points_to_key(f):
+            def _link_points_to_key(f):
                 if not os.path.islink(f):
                     return False
                 path = os.readlink(f)
@@ -171,7 +186,7 @@ class LibraryCommandInterface(object):
 
             # We also allow autocompletion of symlinks in the cwd
             files = os.listdir(os.getcwd())
-            files = list(filter(link_points_to_key, files))
+            files = list(filter(_link_points_to_key, files))
 
             completions = files + keys
 

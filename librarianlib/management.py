@@ -48,6 +48,16 @@ def _match_highlighter(match):
     return style.yellow(match.group(0))
 
 
+def _summarize_doc(doc, verbosity):
+    if verbosity == 0:
+        return doc.key
+    elif verbosity == 1:
+        tmpl = '{title}, {year} ({key})\n{author}'
+        return tmpl.format(title=style.bold(doc.bibtex['title']),
+                           year=doc.bibtex['year'], key=doc.key,
+                           author=doc.bibtex['author'])
+
+
 class LibraryManager(object):
     def __init__(self, search_dirs, config_name):
         config_file_path = _find_config(search_dirs, config_name)
@@ -79,6 +89,11 @@ class LibraryManager(object):
             paths = DocumentPaths(self.archive_path, key)
             docs.append(ArchivalDocument(key, paths))
         return docs
+
+    def all_keys(self):
+        ''' List all keys without the overhead of creating full documents for
+            each. '''
+        return os.listdir(self.archive_path)
 
     def get_doc(self, key):
         ''' Return a single document from the library. '''
@@ -272,18 +287,44 @@ class LibraryManager(object):
             if count > 0:
                 results.append({'key': key, 'count': count, 'detail': detail})
 
-        # Sort and parse the results.
-        output = []
-        for result in sorted(results, key=lambda result: result['count'],
-                             reverse=True):
-            msg = _create_count_message(result['key'], result['count'])
-            if not oneline:
-                msg += '\n'.join(result['detail'])
-            output.append(msg)
+    def search_docs(self, key=None, title=None, author=None, year=None,
+                    venue=None, sort=None, number=None, verbosity=0):
+        # Find documents matching the criteria.
+        docs = []
+        for doc in self.all_docs():
+            if doc.matches(key, title, author, year, venue):
+                docs.append(doc)
 
-        if len(output) == 0:
-            return 'No matches in bibtex.'
-        elif oneline:
-            return '\n'.join(output)
+        # Sort the matching documents.
+        if sort:
+            def _doc_sort_key(doc):
+                if sort == 'key':
+                    return doc.key
+                if sort == 'title':
+                    return doc.bibtex['title'].lower()
+                if sort == 'year':
+                    return doc.bibtex['year']
+                if sort == 'age':
+                    return doc.added_date
+                if sort == 'recent':
+                    return doc.accessed_date
+                return doc.bibtex['year']
+
+            if sort in ['key', 'title']:
+                docs = sorted(docs, key=_doc_sort_key)
+            else:
+                docs = sorted(docs, key=_doc_sort_key, reverse=True)
+
+        # Limit the number of results.
+        if number:
+            docs = docs[:number]
+
+        # Format the results.
+        summaries = [_summarize_doc(doc, verbosity) for doc in docs]
+        if verbosity > 0:
+            summary = '\n\n'.join(summaries)
         else:
-            return '\n\n'.join(output)
+            summary = '\n'.join(summaries)
+        print(summary)
+
+        # TODO use text once implmented
