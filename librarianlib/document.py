@@ -39,21 +39,6 @@ def _parse_pdf_text(pdf_path):
     return text.decode('utf-8')
 
 
-class DocumentPaths(object):
-    ''' Directory structure of a document in the archive. '''
-    def __init__(self, parent, key):
-        self.key_path = os.path.join(parent, key)
-        self.pdf_path = os.path.join(self.key_path, key + '.pdf')
-        self.bib_path = os.path.join(self.key_path, key + '.bib')
-
-        self.metadata_path = os.path.join(self.key_path, '.metadata')
-
-        self.hash_path = os.path.join(self.metadata_path, 'hash.md5')
-        self.text_path = os.path.join(self.metadata_path, 'text.txt')
-        self.accessed_path = os.path.join(self.metadata_path, 'accessed.txt')
-        self.added_path = os.path.join(self.metadata_path, 'added.txt')
-
-
 def _bibtex_customizations(record):
     ''' Customizations to apply to bibtex record. '''
     record = bibtexparser.customization.convert_to_unicode(record)
@@ -137,6 +122,21 @@ def _parse_bibtex(bibtex):
     return title, authors, year, venue, entrytype
 
 
+class DocumentPaths(object):
+    ''' Directory structure of a document in the archive. '''
+    def __init__(self, parent, key):
+        self.key_path = os.path.join(parent, key)
+        self.pdf_path = os.path.join(self.key_path, key + '.pdf')
+        self.bib_path = os.path.join(self.key_path, key + '.bib')
+
+        self.metadata_path = os.path.join(self.key_path, '.metadata')
+
+        self.hash_path = os.path.join(self.metadata_path, 'hash.md5')
+        self.text_path = os.path.join(self.metadata_path, 'text.txt')
+        self.accessed_path = os.path.join(self.metadata_path, 'accessed.txt')
+        self.added_path = os.path.join(self.metadata_path, 'added.txt')
+
+
 class ArchivalDocument(object):
     ''' A document in an archive. '''
     # path contains key
@@ -215,22 +215,25 @@ class ArchivalDocument(object):
 
     def matches(self, key_pattern=None, title_pattern=None,
                 author_pattern=None, year_pattern=None, venue_pattern=None,
-                entrytype_pattern=None):
+                entrytype_pattern=None, text_pattern=None):
         ''' Return True if the document matches the patterns supplied for key,
             title, author, year, and venue. False otherwise. '''
+
+        num_matches = 0
+
         if key_pattern and not re.search(key_pattern, self.key, re.IGNORECASE):
-            return False
+            return False, num_matches
 
         if title_pattern and not re.search(title_pattern, self.title,
                                            re.IGNORECASE):
-            return False
+            return False, num_matches
 
         # Author can be a space-separated list.
         if author_pattern:
             for author in author_pattern.split(' '):
                 if not re.search(author, ' '.join(self.authors),
                                  re.IGNORECASE):
-                    return False
+                    return False, num_matches
 
         # Year can be a single number or a range NNNN-NNNN.
         if year_pattern:
@@ -240,18 +243,98 @@ class ArchivalDocument(object):
                 last  = int(years[1])
                 years = list(range(first, last + 1))
                 if int(self.year) not in years:
-                    return False
+                    return False, num_matches
             elif year_pattern != self.year:
-                return False
+                return False, num_matches
 
         if venue_pattern:
             if not self.venue or not re.search(venue_pattern, self.venue,
                                                re.IGNORECASE):
-                return False
+                return False, num_matches
 
         # Entry type is a simple field so we just do a simple substring check.
         if entrytype_pattern:
             if entrytype_pattern not in self.entrytype:
-                return False
+                return False, num_matches
 
+        if text_pattern:
+            text, _ = self.text()
+            num_matches = len(re.findall(text_pattern, text, re.IGNORECASE))
+            if num_matches == 0:
+                return False, num_matches
+
+        return True, num_matches
+
+
+def _pattern_to_regex(pattern):
+    if pattern:
+        return re.compile(pattern, re.IGNORECASE)
+    return None
+
+
+def _parse_author_pattern(pattern):
+    if pattern:
+        authors = pattern.split(' ')
+        regexes = [re.compile(author, re.IGNORECASE) for author in authors]
+        return regexes
+    return None
+
+
+def _parse_year_pattern(pattern):
+    if pattern:
+        if '-' in pattern:
+            years = pattern.split('-')
+            first = int(years[0])
+            last  = int(years[1])
+            years = [str(year) for year in range(first, last + 1)]
+            return years
+        return [pattern]
+    return None
+
+
+class DocumentTemplate(object):
+    def __init__(self, key_pattern=None, title_pattern=None,
+                 author_pattern=None, year_pattern=None, venue_pattern=None,
+                 entrytype_pattern=None, text_pattern=None):
+        # Syntax: _pattern = string type, _regex = regex type
+        self.key_regex = _pattern_to_regex(key_pattern)
+        self.title_regex = _pattern_to_regex(title_pattern)
+        self.author_regexes = _parse_author_pattern(author_pattern)
+        self.years = _parse_year_pattern(year_pattern)
+        self.venue_regex = _pattern_to_regex(venue_pattern)
+        self.entrytype_pattern = entrytype_pattern
+        self.text_regex = _pattern_to_regex(text_pattern)
+
+    def key(self, key):
+        return not self.key_regex or self.key_regex.search(key)
+
+    def title(self, title):
+        return not self.title_regex or self.title_regex.search(title)
+
+    def authors(self, authors):
+        authors = ' '.join(authors)
+        for regex in self.author_regexes:
+            if not regex.search(authors):
+                return False
         return True
+
+    def year(self, year):
+        return not self.years or year in self.years
+
+    def venue(self, venue):
+        return not self.venue_regex or self.venue_regex.search(venue)
+
+    def entrytype(self, entrytype):
+        return not self.entrytype_pattern or self.entrytype_pattern in entrytype
+
+    def text(self, text):
+        if not self.text_regex:
+            return True, 0
+        count = self.text_regex.findall(text)
+        if count == 0:
+            return False, 0
+        return True, count
+
+    # TODO don't include this: Document's responsibility
+    # def all(self, key, title, author, year, venue, entrytype, text):
+    #     pass

@@ -247,9 +247,6 @@ class LibraryManager(object):
         # document searches, open the doc in a PDF viewer.
         results = []
         for doc in self.all_docs():
-            # Some PDFs have bizarre encodings on which textract fails. For now
-            # we just silently ignore such failures and don't do text search on
-            # these.
             text, new = doc.text()
             if text is None:
                 print('Failed to parse {}.'.format(doc.key))
@@ -302,12 +299,13 @@ class LibraryManager(object):
                 results.append({'key': key, 'count': count, 'detail': detail})
 
     def search_docs(self, key=None, title=None, author=None, year=None,
-                    venue=None, entrytype=None, sort=None, number=None,
-                    reverse=False, verbosity=0):
+                    venue=None, entrytype=None, text=None, sort=None,
+                    number=None, reverse=False, verbosity=0):
+        # TODO perhaps the DocumentFilter class wasn't such a bad idea
         # Find documents matching the criteria.
         docs = []
         for doc in self.all_docs():
-            if doc.matches(key, title, author, year, venue, entrytype):
+            if doc.matches(key, title, author, year, venue, entrytype, text):
                 docs.append(doc)
 
         # Sort the matching documents.
