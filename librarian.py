@@ -48,16 +48,18 @@ def parse_args(cmd_interface):
     grep_parser.set_defaults(func=cmd_interface.grep)
 
     # Browse parser.
-    browse_parser = subparsers.add_parser('browse',
-                                        help='Filter documents.')
-    browse_parser.add_argument('--key')
-    browse_parser.add_argument('--author')
-    browse_parser.add_argument('--title')
-    browse_parser.add_argument('--year')
-    browse_parser.add_argument('--venue')
-    browse_parser.add_argument('--type')
+    browse_parser = subparsers.add_parser('browse', help='Filter documents.')
+    browse_parser.add_argument('--key', help='Filter by key.')
+    browse_parser.add_argument('--author', help='Filter by author.')
+    browse_parser.add_argument('--title', help='Filter by title.')
+    browse_parser.add_argument('--year', help='Filter by publication year.')
+    browse_parser.add_argument('--venue', help='Filter by publication venue.')
+    browse_parser.add_argument('--type', help='Filter by document type.')
+    browse_parser.add_argument('--text', help='Filter by document text.')
+
     browse_parser.add_argument('-s', '--sort',
-                               choices=['key', 'title', 'year', 'added', 'recent'],
+                               choices=['key', 'title', 'year', 'added',
+                                        'recent', 'matches'],
                                help='Sort the results.')
     browse_parser.add_argument('-n', '--number', type=int,
                                help='Limit the number of results.')

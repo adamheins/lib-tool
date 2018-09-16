@@ -213,57 +213,31 @@ class ArchivalDocument(object):
         with open(self.paths.accessed_path, 'w') as f:
             f.write(self.accessed_date.isoformat())
 
-    def matches(self, key_pattern=None, title_pattern=None,
-                author_pattern=None, year_pattern=None, venue_pattern=None,
-                entrytype_pattern=None, text_pattern=None):
-        ''' Return True if the document matches the patterns supplied for key,
-            title, author, year, and venue. False otherwise. '''
+    def matches(self, tmpl):
+        ''' Returns a tuple of the form (result, count). The result is True if
+            the document matches the patterns supplied for key, title, author,
+            year, and venue; false otherwise. The count is the number of
+            matches in the text (this will be 0 if no text pattern is
+            supplied). '''
+        if not tmpl.key(self.key):
+            return False, 0
+        if not tmpl.title(self.title):
+            return False, 0
+        if not tmpl.authors(self.authors):
+            return False, 0
+        if not tmpl.year(self.year):
+            return False, 0
+        if not tmpl.venue(self.venue):
+            return False, 0
+        if not tmpl.entrytype(self.entrytype):
+            return False, 0
 
-        num_matches = 0
-
-        if key_pattern and not re.search(key_pattern, self.key, re.IGNORECASE):
-            return False, num_matches
-
-        if title_pattern and not re.search(title_pattern, self.title,
-                                           re.IGNORECASE):
-            return False, num_matches
-
-        # Author can be a space-separated list.
-        if author_pattern:
-            for author in author_pattern.split(' '):
-                if not re.search(author, ' '.join(self.authors),
-                                 re.IGNORECASE):
-                    return False, num_matches
-
-        # Year can be a single number or a range NNNN-NNNN.
-        if year_pattern:
-            if '-' in year_pattern:
-                years = year_pattern.split('-')
-                first = int(years[0])
-                last  = int(years[1])
-                years = list(range(first, last + 1))
-                if int(self.year) not in years:
-                    return False, num_matches
-            elif year_pattern != self.year:
-                return False, num_matches
-
-        if venue_pattern:
-            if not self.venue or not re.search(venue_pattern, self.venue,
-                                               re.IGNORECASE):
-                return False, num_matches
-
-        # Entry type is a simple field so we just do a simple substring check.
-        if entrytype_pattern:
-            if entrytype_pattern not in self.entrytype:
-                return False, num_matches
-
-        if text_pattern:
+        def _text_func():
             text, _ = self.text()
-            num_matches = len(re.findall(text_pattern, text, re.IGNORECASE))
-            if num_matches == 0:
-                return False, num_matches
+            return text
 
-        return True, num_matches
+        result, count = tmpl.text(_text_func)
+        return result, count
 
 
 def _pattern_to_regex(pattern):
@@ -312,10 +286,11 @@ class DocumentTemplate(object):
         return not self.title_regex or self.title_regex.search(title)
 
     def authors(self, authors):
-        authors = ' '.join(authors)
-        for regex in self.author_regexes:
-            if not regex.search(authors):
-                return False
+        if self.author_regexes:
+            authors = ' '.join(authors)
+            for regex in self.author_regexes:
+                if not regex.search(authors):
+                    return False
         return True
 
     def year(self, year):
@@ -327,14 +302,11 @@ class DocumentTemplate(object):
     def entrytype(self, entrytype):
         return not self.entrytype_pattern or self.entrytype_pattern in entrytype
 
-    def text(self, text):
+    def text(self, text_func):
         if not self.text_regex:
             return True, 0
-        count = self.text_regex.findall(text)
+        text = text_func()
+        count = len(self.text_regex.findall(text))
         if count == 0:
             return False, 0
         return True, count
-
-    # TODO don't include this: Document's responsibility
-    # def all(self, key, title, author, year, venue, entrytype, text):
-    #     pass

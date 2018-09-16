@@ -10,7 +10,7 @@ import bibtexparser
 from bibtexparser.bwriter import BibTexWriter
 
 # Ours.
-from .document import DocumentPaths, ArchivalDocument
+from .document import DocumentPaths, ArchivalDocument, DocumentTemplate
 from .exceptions import LibraryException
 from . import style
 
@@ -49,17 +49,25 @@ def _match_highlighter(match):
     return style.yellow(match.group(0))
 
 
-def _summarize_doc(doc, verbosity):
+def _summarize_doc(doc, count, verbosity):
     ''' Create a string summary of a document. '''
-    if verbosity == 1:
-        tmpl = '{title}\n{year} ({key})\n{author}'
-    elif verbosity == 2:
-        if doc.venue:
-            tmpl = '{title}\n{year} ({key})\n{author}\n{venue}'
-        else:
-            tmpl = '{title}\n{year} ({key})\n{author}'
+    if count > 0:
+        count_phrase = ' (Matches = {count})'
     else:
-        tmpl = '{key}'
+        count_phrase = ''
+
+    if doc.venue:
+        venue_phrase = '\n{venue}'
+    else:
+        venue_phrase = ''
+
+    if verbosity == 1:
+        tmpl = ''.join(['{title}\n{year} ({key})', count_phrase, '\n{author}'])
+    elif verbosity == 2:
+        tmpl = ''.join(['{title}\n{year} ({key})', count_phrase, '\n{author}',
+                        venue_phrase])
+    else:
+        tmpl = ''.join(['{key}', count_phrase])
 
     # Wrap the title at 80 chars.
     title = textwrap.fill(doc.title, width=80)
@@ -69,7 +77,8 @@ def _summarize_doc(doc, verbosity):
         title = style.bold(title)
 
     return tmpl.format(title=title, year=doc.year, key=doc.key,
-                       author='; '.join(doc.authors), venue=doc.venue)
+                       author='; '.join(doc.authors), venue=doc.venue,
+                       count=count)
 
 
 class LibraryManager(object):
@@ -301,16 +310,22 @@ class LibraryManager(object):
     def search_docs(self, key=None, title=None, author=None, year=None,
                     venue=None, entrytype=None, text=None, sort=None,
                     number=None, reverse=False, verbosity=0):
-        # TODO perhaps the DocumentFilter class wasn't such a bad idea
         # Find documents matching the criteria.
+        tmpl = DocumentTemplate(key, title, author, year, venue, entrytype,
+                                text)
         docs = []
+        counts = []
         for doc in self.all_docs():
-            if doc.matches(key, title, author, year, venue, entrytype, text):
+            result, count = doc.matches(tmpl)
+            if result:
                 docs.append(doc)
+                counts.append(count)
 
         # Sort the matching documents.
         if sort:
-            def _doc_sort_key(doc):
+            def _doc_sort_key(doc_count_tuple):
+                doc, count = doc_count_tuple
+
                 if sort == 'key':
                     return doc.key
                 if sort == 'title':
@@ -321,23 +336,29 @@ class LibraryManager(object):
                     return doc.added_date
                 if sort == 'recent':
                     return doc.accessed_date
+                if sort == 'matches':
+                    return count
                 return doc.bibtex['year']
 
-            if sort in ['key', 'title']:
-                docs = sorted(docs, key=_doc_sort_key, reverse=reverse)
-            else:
-                docs = sorted(docs, key=_doc_sort_key, reverse=not reverse)
+            if sort not in ['key', 'title']:
+                reverse = not reverse
+            docs_counts = sorted(zip(docs, counts), key=_doc_sort_key,
+                                 reverse=reverse)
+            docs, counts = tuple(zip(*docs_counts))
 
         # Limit the number of results.
         if number:
             docs = docs[:number]
 
         # Format the results.
-        summaries = [_summarize_doc(doc, verbosity) for doc in docs]
-        if verbosity > 0:
+        summaries = []
+        for doc, count in zip(docs, counts):
+            summaries.append(_summarize_doc(doc, count, verbosity))
+
+        if len(summaries) == 0:
+            return ''
+        elif verbosity > 0:
             summary = '\n\n'.join(summaries)
         else:
             summary = '\n'.join(summaries)
-        print(summary)
-
-        # TODO use text once implmented
+        return summary

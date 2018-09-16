@@ -85,6 +85,7 @@ class LibraryCommandInterface(object):
         key = kwargs['key']
         venue = kwargs['venue']
         entrytype = kwargs['type']
+        text = kwargs['text']
 
         # Display options.
         sort = kwargs['sort']
@@ -92,11 +93,13 @@ class LibraryCommandInterface(object):
         reverse = kwargs['reverse']
         verbosity = kwargs['verbose'] if kwargs['verbose'] else 0
 
-        self.manager.search_docs(key=key, title=title, author=author,
-                                 year=year, venue=venue, entrytype=entrytype,
-                                 sort=sort, number=number, reverse=reverse,
-                                 verbosity=verbosity)
-        # TODO need to be able to search for particular fields
+        results = self.manager.search_docs(key=key, title=title, author=author,
+                                           year=year, venue=venue,
+                                           entrytype=entrytype, text=text,
+                                           sort=sort, number=number,
+                                           reverse=reverse,
+                                           verbosity=verbosity)
+        print(results)
 
     def index(self, **kwargs):
         ''' Create an index file with links and information for easy browsing.
