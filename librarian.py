@@ -29,26 +29,9 @@ def parse_args(cmd_interface):
     link_parser.add_argument('name', nargs='?', help='Name for the link.')
     link_parser.set_defaults(func=cmd_interface.link)
 
-    # Index parser.
-    index_parser = subparsers.add_parser('index')
-    index_parser.set_defaults(func=cmd_interface.index)
-
-    # Grep parser.
-    grep_parser = subparsers.add_parser('grep', aliases=['search'],
-                                        help='Search the library.')
-    grep_parser.add_argument('regex', help='Search for the regex')
-    grep_parser.add_argument('-b', '--bib', '--bibtex', action='store_true',
-                             help='Search bibtex files.')
-    grep_parser.add_argument('-t', '--text', action='store_true',
-                             help='Search document text.')
-    grep_parser.add_argument('-o', '--oneline', action='store_true',
-                             help='Only output filename and match count.')
-    grep_parser.add_argument('-c', '--case-sensitive', action='store_true',
-                             help='Case sensitive search.')
-    grep_parser.set_defaults(func=cmd_interface.grep)
-
     # Browse parser.
-    browse_parser = subparsers.add_parser('browse', help='Filter documents.')
+    browse_parser = subparsers.add_parser('browse', aliases=['search'],
+                                          help='Filter documents.')
     browse_parser.add_argument('--key', help='Filter by key.')
     browse_parser.add_argument('--author', help='Filter by author.')
     browse_parser.add_argument('--title', help='Filter by title.')

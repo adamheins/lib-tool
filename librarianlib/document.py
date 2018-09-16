@@ -122,6 +122,89 @@ def _parse_bibtex(bibtex):
     return title, authors, year, venue, entrytype
 
 
+def _pattern_to_regex(pattern):
+    ''' Convert a text pattern to a regex object. '''
+    if pattern:
+        return re.compile(pattern, re.IGNORECASE)
+    return None
+
+
+def _parse_author_pattern(pattern):
+    ''' Parse the author text pattern into a list of regexes. '''
+    if pattern:
+        authors = pattern.split(' ')
+        regexes = [re.compile(author, re.IGNORECASE) for author in authors]
+        return regexes
+    return None
+
+
+def _parse_year_pattern(pattern):
+    ''' Parse the year text pattern into a list years (strings). '''
+    if pattern:
+        if '-' in pattern:
+            years = pattern.split('-')
+            first = int(years[0])
+            last  = int(years[1])
+            years = [str(year) for year in range(first, last + 1)]
+            return years
+        return [pattern]
+    return None
+
+
+class DocumentTemplate(object):
+    ''' A template for matching documents. '''
+    def __init__(self, key_pattern=None, title_pattern=None,
+                 author_pattern=None, year_pattern=None, venue_pattern=None,
+                 entrytype_pattern=None, text_pattern=None):
+        # Syntax: _pattern = string type, _regex = regex type
+        self.key_regex = _pattern_to_regex(key_pattern)
+        self.title_regex = _pattern_to_regex(title_pattern)
+        self.author_regexes = _parse_author_pattern(author_pattern)
+        self.years = _parse_year_pattern(year_pattern)
+        self.venue_regex = _pattern_to_regex(venue_pattern)
+        self.entrytype_pattern = entrytype_pattern
+        self.text_regex = _pattern_to_regex(text_pattern)
+
+    def key(self, key):
+        ''' Test key match. '''
+        return not self.key_regex or self.key_regex.search(key)
+
+    def title(self, title):
+        ''' Test title match. '''
+        return not self.title_regex or self.title_regex.search(title)
+
+    def authors(self, authors):
+        ''' Test authors match. '''
+        if self.author_regexes:
+            authors = ' '.join(authors)
+            for regex in self.author_regexes:
+                if not regex.search(authors):
+                    return False
+        return True
+
+    def year(self, year):
+        ''' Test year match. '''
+        return not self.years or year in self.years
+
+    def venue(self, venue):
+        ''' Test venue match. '''
+        return not self.venue_regex or self.venue_regex.search(venue)
+
+    def entrytype(self, entrytype):
+        ''' Test entrytype match. '''
+        return not self.entrytype_pattern or self.entrytype_pattern in entrytype
+
+    def text(self, text_func):
+        ''' Test text match. '''
+        if not self.text_regex:
+            return True, 0
+        text = text_func()
+        count = len(self.text_regex.findall(text))
+        if count == 0:
+            return False, 0
+        return True, count
+
+
 class DocumentPaths(object):
     ''' Directory structure of a document in the archive. '''
     def __init__(self, parent, key):
@@ -238,75 +321,3 @@ class ArchivalDocument(object):
 
         result, count = tmpl.text(_text_func)
         return result, count
-
-
-def _pattern_to_regex(pattern):
-    if pattern:
-        return re.compile(pattern, re.IGNORECASE)
-    return None
-
-
-def _parse_author_pattern(pattern):
-    if pattern:
-        authors = pattern.split(' ')
-        regexes = [re.compile(author, re.IGNORECASE) for author in authors]
-        return regexes
-    return None
-
-
-def _parse_year_pattern(pattern):
-    if pattern:
-        if '-' in pattern:
-            years = pattern.split('-')
-            first = int(years[0])
-            last  = int(years[1])
-            years = [str(year) for year in range(first, last + 1)]
-            return years
-        return [pattern]
-    return None
-
-
-class DocumentTemplate(object):
-    def __init__(self, key_pattern=None, title_pattern=None,
-                 author_pattern=None, year_pattern=None, venue_pattern=None,
-                 entrytype_pattern=None, text_pattern=None):
-        # Syntax: _pattern = string type, _regex = regex type
-        self.key_regex = _pattern_to_regex(key_pattern)
-        self.title_regex = _pattern_to_regex(title_pattern)
-        self.author_regexes = _parse_author_pattern(author_pattern)
-        self.years = _parse_year_pattern(year_pattern)
-        self.venue_regex = _pattern_to_regex(venue_pattern)
-        self.entrytype_pattern = entrytype_pattern
-        self.text_regex = _pattern_to_regex(text_pattern)
-
-    def key(self, key):
-        return not self.key_regex or self.key_regex.search(key)
-
-    def title(self, title):
-        return not self.title_regex or self.title_regex.search(title)
-
-    def authors(self, authors):
-        if self.author_regexes:
-            authors = ' '.join(authors)
-            for regex in self.author_regexes:
-                if not regex.search(authors):
-                    return False
-        return True
-
-    def year(self, year):
-        return not self.years or year in self.years
-
-    def venue(self, venue):
-        return not self.venue_regex or self.venue_regex.search(venue)
-
-    def entrytype(self, entrytype):
-        return not self.entrytype_pattern or self.entrytype_pattern in entrytype
-
-    def text(self, text_func):
-        if not self.text_regex:
-            return True, 0
-        text = text_func()
-        count = len(self.text_regex.findall(text))
-        if count == 0:
-            return False, 0
-        return True, count

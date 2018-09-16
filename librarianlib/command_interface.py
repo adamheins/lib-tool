@@ -50,34 +50,8 @@ class LibraryCommandInterface(object):
         else:
             self.manager.link(key, kwargs['name'])
 
-    def grep(self, **kwargs):
-        ''' Search for a regex in the library. '''
-
-        # Construct search regex.
-        regex = kwargs['regex']
-
-        if kwargs['case_sensitive']:
-            regex = re.compile(regex)
-        else:
-            regex = re.compile(regex, re.IGNORECASE)
-
-        # If neither --bib nor --text are specified, search both. Likewise, if
-        # both are specified, also search both. We only don't search one if
-        # only the other is specified.
-        search_bib = kwargs['bib'] or not kwargs['text']
-        search_text = kwargs['text'] or not kwargs['bib']
-
-        if search_bib:
-            bibtex_results = self.manager.search_bibtex(regex,
-                                                        kwargs['oneline'])
-            print(bibtex_results)
-
-        if search_text:
-            text_results = self.manager.search_text(regex, kwargs['oneline'],
-                                                    verbose=True)
-            print(text_results)
-
     def browse(self, **kwargs):
+        ''' Browse/search documents. '''
         # Filters.
         author = kwargs['author']
         year = kwargs['year']
@@ -100,19 +74,6 @@ class LibraryCommandInterface(object):
                                            reverse=reverse,
                                            verbosity=verbosity)
         print(results)
-
-    def index(self, **kwargs):
-        ''' Create an index file with links and information for easy browsing.
-            '''
-        bib_dict = self.manager.bibtex_dict()
-        html = index.html(self.manager, bib_dict)
-
-        if os.path.exists('library.html'):
-            raise LibraryException('File library.html already exists. Aborting.')
-
-        with open('library.html', 'w') as index_file:
-            index_file.write(html)
-        print('Wrote index to library.html.')
 
     def compile(self, **kwargs):
         ''' Compile a single bibtex file and/or a single directory of PDFs. '''

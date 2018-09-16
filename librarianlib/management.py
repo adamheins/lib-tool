@@ -36,19 +36,6 @@ def _key_from_bibtex(bib_path):
     return keys[0]
 
 
-def _create_count_message(key, count):
-    ''' Create a message about count of matches for the given key. '''
-    if count == 1:
-        return '{}: 1 match'.format(style.bold(key))
-    elif count > 1:
-        return '{}: {} matches'.format(style.bold(key), count)
-
-
-def _match_highlighter(match):
-    ''' Highlight match. '''
-    return style.yellow(match.group(0))
-
-
 def _summarize_doc(doc, count, verbosity):
     ''' Create a string summary of a document. '''
     if count > 0:
@@ -82,6 +69,7 @@ def _summarize_doc(doc, count, verbosity):
 
 
 class LibraryManager(object):
+    ''' Manager for the library. Handles all interactions with it. '''
     def __init__(self, search_dirs, config_name):
         config_file_path = _find_config(search_dirs, config_name)
         if config_file_path is None:
@@ -124,39 +112,6 @@ class LibraryManager(object):
             raise Exception('Key {} not found in archive.'.format(key))
         paths = DocumentPaths(self.archive_path, key)
         return ArchivalDocument(key, paths)
-
-    # def bibtex_dict(self, extra_customization=None):
-    #     ''' Load bibtex information as a dictionary. '''
-    #     def _bibtex_customizations(record):
-    #         record = customization.convert_to_unicode(record)
-    #
-    #         # Make authors semicolon-separated rather than and-separated.
-    #         record['author'] = record['author'].replace(' and', ';')
-    #
-    #         # Apply extra customization function is applicable.
-    #         if extra_customization:
-    #             record = extra_customization(record)
-    #         return record
-    #
-    #     # We parse each string of bibtex separately and then merge the
-    #     # resultant dictionaries together, so that we can handle malformed
-    #     # bibtex files individually.
-    #     entries_dict = {}
-    #     for doc in self.all_docs():
-    #         bib_text = doc.bibtex
-    #         # common_strings=True lets us parse the month field as "jan",
-    #         # "feb", etc.
-    #         parser = bibtexparser.bparser.BibTexParser(
-    #                 customization=_bibtex_customizations,
-    #                 common_strings=True)
-    #         try:
-    #             d = bibtexparser.loads(bib_text, parser=parser).entries_dict
-    #         except:
-    #             bib_file = os.path.basename(doc.paths.bib_path)
-    #             print('Encountered an error while processing {}.'.format(bib_file))
-    #             continue
-    #         entries_dict.update(d)
-    #     return entries_dict
 
     def add(self, pdf_src_path, bib_src_path):
         ''' Add a new document to the archive. Returns the document. '''
@@ -249,63 +204,6 @@ class LibraryManager(object):
         name = name if name is not None else key
         path = os.path.join(self.bookmarks_path, name)
         self.link(key, path)
-
-    def search_text(self, regex, oneline, verbose=False):
-        ''' Search for the regex in the PDF documents. '''
-        # We assume that we want to search the whole corpus. For single
-        # document searches, open the doc in a PDF viewer.
-        results = []
-        for doc in self.all_docs():
-            text, new = doc.text()
-            if text is None:
-                print('Failed to parse {}.'.format(doc.key))
-                continue
-            elif new:
-                print('Successfully parsed {}.'.format(doc.key))
-
-            count = len(regex.findall(text))
-            if count > 0:
-                results.append({'key': doc.key, 'count': count, 'detail': ''})
-
-        # Sort and parse the results.
-        output = []
-        for result in sorted(results, key=lambda result: result['count'],
-                             reverse=True):
-            msg = _create_count_message(result['key'], result['count'])
-            output.append(msg)
-
-        if len(output) == 0:
-            return 'No matches in text.'
-        elif oneline:
-            return '\n'.join(output)
-        else:
-            return '\n'.join(output) # TODO when more detail is given, use two \n\n
-
-    def search_bibtex(self, regex, oneline):
-        ''' Search for the regex in bibtex file. '''
-        results = []
-
-        for key, info in self.bibtex_dict().items():
-            count = 0
-            detail = []
-            for field, value in info.items():
-                # Skip the ID field; it's already a composition of parts of
-                # other fields.
-                if field == 'ID':
-                    continue
-
-                # Find all the matches.
-                matches = regex.findall(value)
-                count += len(matches)
-                if len(matches) == 0:
-                    continue
-
-                # Highlight the matches.
-                s = regex.sub(_match_highlighter, value)
-                detail.append('  {}: {}'.format(field, s))
-
-            if count > 0:
-                results.append({'key': key, 'count': count, 'detail': detail})
 
     def search_docs(self, key=None, title=None, author=None, year=None,
                     venue=None, entrytype=None, text=None, sort=None,
