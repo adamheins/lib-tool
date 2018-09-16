@@ -310,6 +310,8 @@ class LibraryManager(object):
     def search_docs(self, key=None, title=None, author=None, year=None,
                     venue=None, entrytype=None, text=None, sort=None,
                     number=None, reverse=False, verbosity=0):
+        ''' Search documents for those that match the provided filters and
+            produce a summary of the results. '''
         # Find documents matching the criteria.
         tmpl = DocumentTemplate(key, title, author, year, venue, entrytype,
                                 text)
