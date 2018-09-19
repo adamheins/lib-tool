@@ -256,7 +256,7 @@ class LibraryManager(object):
             summaries.append(_summarize_doc(doc, count, verbosity))
 
         if len(summaries) == 0:
-            return ''
+            return None
         elif verbosity > 0:
             summary = '\n\n'.join(summaries)
         else:

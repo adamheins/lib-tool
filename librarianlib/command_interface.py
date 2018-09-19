@@ -73,7 +73,8 @@ class LibraryCommandInterface(object):
                                            sort=sort, number=number,
                                            reverse=reverse,
                                            verbosity=verbosity)
-        print(results)
+        if results:
+            print(results)
 
     def compile(self, **kwargs):
         ''' Compile a single bibtex file and/or a single directory of PDFs. '''

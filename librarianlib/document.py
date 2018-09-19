@@ -188,7 +188,14 @@ class DocumentTemplate(object):
 
     def venue(self, venue):
         ''' Test venue match. '''
-        return not self.venue_regex or self.venue_regex.search(venue)
+        # If we're not trying the match the venue, return True.
+        # If we are trying to match but have no venue, return False.
+        # Otherwise, return True if the venue matches.
+        if not self.venue_regex:
+            return True
+        if not venue:
+            return False
+        return self.venue_regex.search(venue)
 
     def entrytype(self, entrytype):
         ''' Test entrytype match. '''
