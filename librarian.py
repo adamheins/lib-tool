@@ -30,7 +30,7 @@ def parse_args(cmd_interface):
     link_parser.set_defaults(func=cmd_interface.link)
 
     # Browse parser.
-    browse_parser = subparsers.add_parser('browse', aliases=['search'],
+    browse_parser = subparsers.add_parser('browse', aliases=['search', 'grep'],
                                           help='Filter documents.')
     browse_parser.add_argument('--key', help='Filter by key.')
     browse_parser.add_argument('--author', help='Filter by author.')
@@ -135,7 +135,11 @@ def main():
     args, func = parse_args(cmd_interface)
 
     try:
-        func(**args)
+        # Handle ctrl-c nicely.
+        try:
+            func(**args)
+        except KeyboardInterrupt:
+            return 1
     except LibraryException as e:
         print(e.message)
         return 1

@@ -86,7 +86,7 @@ case $state in
     case $line[1] in
       (link|ln)     _lib_link ;;
       (bookmark|bm) _lib_key ;;
-      (browse|search) _lib_browse ;;
+      (browse|search|grep) _lib_browse ;;
       (cd)          _lib_cd ;;
       (open)        _lib_open ;;
       (add)         _lib_add  ;;
