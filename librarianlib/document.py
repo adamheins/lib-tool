@@ -131,6 +131,10 @@ def _pattern_to_regex(pattern):
 
 def _parse_author_pattern(pattern):
     ''' Parse the author text pattern into a list of regexes. '''
+    # TODO authors may currently be a space separated list, but a
+    # comma-separated list may be easier? The parsing for this could actually
+    # get quite complicated: combination of matchs vs all authors, given vs
+    # family name, etc
     if pattern:
         authors = pattern.split(' ')
         regexes = [re.compile(author, re.IGNORECASE) for author in authors]
@@ -151,11 +155,17 @@ def _parse_year_pattern(pattern):
     return None
 
 
+def _pattern_to_list(pattern):
+    if pattern:
+        return pattern.split(',')
+    return None
+
+
 class DocumentTemplate(object):
     ''' A template for matching documents. '''
     def __init__(self, key_pattern=None, title_pattern=None,
                  author_pattern=None, year_pattern=None, venue_pattern=None,
-                 entrytype_pattern=None, text_pattern=None):
+                 entrytype_pattern=None, text_pattern=None, tag_pattern=None):
         # Syntax: _pattern = string type, _regex = regex type
         self.key_regex = _pattern_to_regex(key_pattern)
         self.title_regex = _pattern_to_regex(title_pattern)
@@ -164,6 +174,7 @@ class DocumentTemplate(object):
         self.venue_regex = _pattern_to_regex(venue_pattern)
         self.entrytype_pattern = entrytype_pattern
         self.text_regex = _pattern_to_regex(text_pattern)
+        self.tag_list = _pattern_to_list(tag_pattern)
 
     def key(self, key):
         ''' Test key match. '''
@@ -211,6 +222,14 @@ class DocumentTemplate(object):
             return False, 0
         return True, count
 
+    def tags(self, tags):
+        # The document must have each of the tags in the template (though of
+        # course may have additional ones).
+        for tag in self.tag_list:
+            if tag not in tags:
+                return False
+        return True
+
 
 class DocumentPaths(object):
     ''' Directory structure of a document in the archive. '''
@@ -218,6 +237,7 @@ class DocumentPaths(object):
         self.key_path = os.path.join(parent, key)
         self.pdf_path = os.path.join(self.key_path, key + '.pdf')
         self.bib_path = os.path.join(self.key_path, key + '.bib')
+        self.tag_path = os.path.join(self.key_path, 'tags.txt')
 
         self.metadata_path = os.path.join(self.key_path, '.metadata')
 
@@ -238,6 +258,13 @@ class ArchivalDocument(object):
         info = _parse_bibtex(self.bibtex)
         self.title, self.authors, self.year, self.venue, self.entrytype = info
 
+        # Load tags.
+        if os.path.exists(self.paths.tag_path):
+            with open(self.paths.tag_path) as f:
+                self.tags = f.read().strip().split()
+        else:
+            self.tags = []
+
         # Sanity checks.
         if not os.path.exists(self.paths.metadata_path):
             os.mkdir(self.paths.metadata_path)
@@ -245,6 +272,16 @@ class ArchivalDocument(object):
         # Dates.
         self.added_date = self._read_date('added.txt')
         self.accessed_date = self._read_date('accessed.txt')
+
+    def tag(self, tags):
+        ''' Add one or more tags to the document. 'tags' may be a string
+            representing a single tag, or a list of tags. '''
+        if type(tags) == list:
+            self.tags.extend(tags)
+        else:
+            self.tags.append(tags)
+        with open(self.paths.tag_path, 'w') as f:
+            f.write('\n'.join(self.tags))
 
     def _read_date(self, fname):
         path = os.path.join(self.paths.metadata_path, fname)
@@ -320,6 +357,8 @@ class ArchivalDocument(object):
         if not tmpl.venue(self.venue):
             return False, 0
         if not tmpl.entrytype(self.entrytype):
+            return False, 0
+        if not tmpl.tags(self.tags):
             return False, 0
 
         def _text_func():

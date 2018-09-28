@@ -39,6 +39,7 @@ def parse_args(cmd_interface):
     browse_parser.add_argument('--venue', help='Filter by publication venue.')
     browse_parser.add_argument('--type', help='Filter by document type.')
     browse_parser.add_argument('--text', help='Filter by document text.')
+    browse_parser.add_argument('--tags', help='Filter by document tags.')
 
     browse_parser.add_argument('-s', '--sort',
                                choices=['key', 'title', 'year', 'added',

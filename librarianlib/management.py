@@ -206,13 +206,13 @@ class LibraryManager(object):
         self.link(key, path)
 
     def search_docs(self, key=None, title=None, author=None, year=None,
-                    venue=None, entrytype=None, text=None, sort=None,
-                    number=None, reverse=False, verbosity=0):
+                    venue=None, entrytype=None, text=None, tags=None,
+                    sort=None, number=None, reverse=False, verbosity=0):
         ''' Search documents for those that match the provided filters and
             produce a summary of the results. '''
         # Find documents matching the criteria.
         tmpl = DocumentTemplate(key, title, author, year, venue, entrytype,
-                                text)
+                                text, tags)
         docs = []
         counts = []
         for doc in self.all_docs():

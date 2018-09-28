@@ -60,6 +60,7 @@ class LibraryCommandInterface(object):
         venue = kwargs['venue']
         entrytype = kwargs['type']
         text = kwargs['text']
+        tags = kwargs['tags']
 
         # Display options.
         sort = kwargs['sort']
@@ -70,7 +71,7 @@ class LibraryCommandInterface(object):
         results = self.manager.search_docs(key=key, title=title, author=author,
                                            year=year, venue=venue,
                                            entrytype=entrytype, text=text,
-                                           sort=sort, number=number,
+                                           tags=tags, sort=sort, number=number,
                                            reverse=reverse,
                                            verbosity=verbosity)
         if results:
