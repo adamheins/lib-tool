@@ -145,9 +145,10 @@ class LibraryManager(object):
 
         new_paths = DocumentPaths(self.archive_path, new_key)
 
-        shutil.move(old_paths.pdf_path, new_paths.pdf_path)
+        os.mkdir(new_paths.key_path)
         shutil.move(old_paths.bib_path, new_paths.bib_path)
-        shutil.move(old_paths.key_path, new_paths.key_path)
+        shutil.move(old_paths.pdf_path, new_paths.pdf_path)
+        shutil.rmtree(old_paths.key_path)
 
         # Write the new_key to the bibtex file
         with open(new_paths.bib_path, 'r+') as f:
