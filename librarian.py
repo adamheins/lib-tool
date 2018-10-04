@@ -61,8 +61,8 @@ def parse_args(cmd_interface):
     add_parser.add_argument('bibtex', help='Associated bibtex file.')
     add_parser.add_argument('-d', '--delete', action='store_true',
                             help='Delete files after archiving.')
-    add_parser.add_argument('-b', '--bookmark', action='store_true',
-                            help='Also create a bookmark to this document.')
+    add_parser.add_argument('-t', '--tag',
+                            help='Apply one or more tags to the document.')
     add_parser.set_defaults(func=cmd_interface.add)
 
     # Open parser.

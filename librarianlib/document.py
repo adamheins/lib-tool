@@ -158,7 +158,7 @@ def _parse_year_pattern(pattern):
 def _pattern_to_list(pattern):
     if pattern:
         return pattern.split(',')
-    return None
+    return []
 
 
 class DocumentTemplate(object):
@@ -223,6 +223,7 @@ class DocumentTemplate(object):
         return True, count
 
     def tags(self, tags):
+        ''' Test tags match. '''
         # The document must have each of the tags in the template (though of
         # course may have additional ones).
         for tag in self.tag_list:

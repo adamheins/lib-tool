@@ -1,12 +1,8 @@
 import os
-import re
 import shutil
 import subprocess
 
 import editor
-
-from librarianlib import index
-from librarianlib.exceptions import LibraryException
 
 
 def sanitize_key(key):
@@ -106,14 +102,10 @@ class LibraryCommandInterface(object):
             os.remove(pdf_file_name)
             os.remove(bib_file_name)
 
-        if kwargs['bookmark']:
-            self.manager.bookmark(doc.key, None)
+        if kwargs['tag']:
+            self.manager.tag(doc.key, kwargs['tag'])
 
-        if kwargs['bookmark']:
-            msg = 'Archived to {} and bookmarked.'.format(doc.key)
-        else:
-            msg = 'Archived to {}.'.format(doc.key)
-        print(msg)
+        print('Archived to {}.'.format(doc.key))
 
     def where(self, **kwargs):
         ''' Print out library directories. '''
@@ -165,6 +157,5 @@ class LibraryCommandInterface(object):
     def rekey(self, **kwargs):
         ''' Change the name of a key. '''
         key = sanitize_key(kwargs['key'])
-        new_key = kwargs['new-key']
-        self.manager.rekey(key, new_key)
+        new_key = self.manager.rekey(key, kwargs['new-key'])
         print('Renamed {} to {}.'.format(key, new_key))

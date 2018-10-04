@@ -54,7 +54,7 @@ _lib_open() {
 _lib_add() {
   # The -s allows stacking of single-letter arguments.
   _arguments -s '-d' '--delete' \
-                '-b' '--bookmark' \
+                '-t' '--tag' \
                 '1: :_files -g "*.pdf"' \
                 '2: :_files -g "*.bib"'
 }

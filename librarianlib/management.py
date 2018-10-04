@@ -145,17 +145,23 @@ class LibraryManager(object):
 
         new_paths = DocumentPaths(self.archive_path, new_key)
 
-        os.mkdir(new_paths.key_path)
-        shutil.move(old_paths.bib_path, new_paths.bib_path)
-        shutil.move(old_paths.pdf_path, new_paths.pdf_path)
-        shutil.rmtree(old_paths.key_path)
+        # Rename PDF and bibtex file and then rename the whole directory.
+        shutil.move(old_paths.bib_path,
+                    os.path.join(old_paths.key_path, new_key + '.bib'))
+        shutil.move(old_paths.pdf_path,
+                    os.path.join(old_paths.key_path, new_key + '.pdf'))
+        shutil.move(old_paths.key_path, new_paths.key_path)
 
         # Write the new_key to the bibtex file
-        with open(new_paths.bib_path, 'r+') as f:
+        with open(new_paths.bib_path, 'r') as f:
             bib_info = bibtexparser.load(f)
-            bib_info.entries[0]['ID'] = new_key
-            bib_writer = BibTexWriter()
+
+        bib_info.entries[0]['ID'] = new_key
+        bib_writer = BibTexWriter()
+        with open(new_paths.bib_path, 'w') as f:
             f.write(bib_writer.write(bib_info))
+
+        return new_key
 
     def link(self, key, path):
         ''' Create a symlink to a document in the archive. '''
@@ -194,6 +200,10 @@ class LibraryManager(object):
         files = os.listdir(directory)
         for link in filter(os.path.islink, files):
             self.fix_link(link)
+
+    def tag(self, key, tags):
+        tags = tags.split(',')
+        self.get_doc(key).tag(tags)
 
     def bookmark(self, key, name):
         ''' Create a bookmark 'name' pointing to the key. '''
