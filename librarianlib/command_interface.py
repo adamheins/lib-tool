@@ -30,6 +30,13 @@ class LibraryCommandInterface(object):
         doc.access()
         if kwargs['bib']:
             editor.edit(doc.paths.bib_path)
+        elif kwargs['tag']:
+            try:
+                editor.edit(doc.paths.tag_path)
+            # FileNotFoundError is thrown if file doesn't exist and isn't
+            # created during the editing process. Just ignore this.
+            except FileNotFoundError:
+                pass
         else:
             cmd = 'nohup xdg-open {} >/dev/null 2>&1 &'.format(doc.paths.pdf_path)
             subprocess.run(cmd, shell=True)
@@ -120,29 +127,8 @@ class LibraryCommandInterface(object):
 
     def complete(self, **kwargs):
         ''' Print completions for commands. '''
-        cmd = kwargs['cmd']
         keys = self.manager.all_keys()
-
-        # Completion just for keys in the archive.
-        if cmd == 'keys':
-            completions = keys
-
-        # Completion for keys as well as symlinks that point to keys.
-        elif cmd == 'keys-and-links':
-            def _link_points_to_key(f):
-                if not os.path.islink(f):
-                    return False
-                path = os.readlink(f)
-                key = sanitize_key(os.path.basename(path))
-                return self.manager.has_key(key)
-
-            # We also allow autocompletion of symlinks in the cwd
-            files = os.listdir(os.getcwd())
-            files = list(filter(_link_points_to_key, files))
-
-            completions = files + keys
-
-        print(' '.join(completions))
+        print(' '.join(keys))
 
     def rekey(self, **kwargs):
         ''' Change the name of a key. '''

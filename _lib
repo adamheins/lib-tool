@@ -11,8 +11,7 @@ local archivepath=$(lib where)
 # Completion for top-level commands.
 _lib_cmds() {
   local subcmds=('open:open' 'add:add' 'browse:browse' 'search:search' \
-                 'link:link' 'ln:ln' 'compile:compile' 'where:where' \
-                 'bookmark:bookmark' 'bm:bm' 'cd:cd' 'rekey:rekey' \
+                 'link:link' 'ln:ln' 'where:where' 'cd:cd' 'rekey:rekey' \
                  'rename:rename')
   _describe 'command' subcmds
 }
@@ -25,7 +24,7 @@ _lib_cd() {
 
 # Simply complete a key in the archive or shelves.
 _lib_key() {
-  local keys=($(lib complete keys))
+  local keys=($(lib complete))
   _values 'key' $keys
 }
 
@@ -34,7 +33,7 @@ _lib_key() {
 _lib_open() {
   # Here we use both a custom list of completion strings and the files in the
   # shelves directory.
-  local opts=($(lib complete keys))
+  local opts=($(lib complete))
   _alternative 'args: :((-b\:"open bibtex"))' \
                "links: :_values key $opts"
 }
@@ -44,7 +43,7 @@ _lib_open() {
 _lib_add() {
   # The -s allows stacking of single-letter arguments.
   _arguments -s '-d' '--delete' \
-                '-t' '--tag' \
+                '-t=:' '--tag=:' \
                 '1: :_files -g "*.pdf"' \
                 '2: :_files -g "*.bib"'
 }

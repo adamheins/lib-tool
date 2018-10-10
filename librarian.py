@@ -70,7 +70,9 @@ def parse_args(cmd_interface):
                                         help='Open a document for viewing.')
     open_parser.add_argument('key', help='Key for document to open.')
     open_parser.add_argument('-b', '--bib', '--bibtex', action='store_true',
-                             help='Open bibtex files.')
+                             help='Open bibtex file.')
+    open_parser.add_argument('-t', '--tag',action='store_true',
+                             help='Open tag file.')
     open_parser.set_defaults(func=cmd_interface.open)
 
     # Compile subcommand.
@@ -94,10 +96,8 @@ def parse_args(cmd_interface):
                                  help='Name for the bookmark.')
     bookmark_parser.set_defaults(func=cmd_interface.bookmark)
 
-    # Hidden subcommand for generating non-trivial completion lists for
-    # commands.
+    # Hidden subcommand for generating completion list of keys.
     complete_parser = subparsers.add_parser('complete', help=argparse.SUPPRESS)
-    complete_parser.add_argument('cmd')
     complete_parser.set_defaults(func=cmd_interface.complete)
 
     rekey_parser = subparsers.add_parser(
