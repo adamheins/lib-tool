@@ -83,13 +83,7 @@ def parse_args(cmd_interface):
 
     # Where subcommand.
     where_parser = subparsers.add_parser('where',
-                                         help='Print library directories.')
-    where_parser.add_argument('-a', '--archive', action='store_true',
-                              help='Print location of archive.')
-    where_parser.add_argument('-s', '--shelves', action='store_true',
-                              help='Print location of shelves.')
-    where_parser.add_argument('-b', '--bookmarks', action='store_true',
-                              help='Print location of bookmarks.')
+                                         help='Print library archive directory.')
     where_parser.set_defaults(func=cmd_interface.where)
 
     # Bookmark subcommand.

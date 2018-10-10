@@ -109,17 +109,7 @@ class LibraryCommandInterface(object):
 
     def where(self, **kwargs):
         ''' Print out library directories. '''
-        if kwargs['archive']:
-            print(self.manager.archive_path)
-        elif kwargs['shelves']:
-            print(self.manager.shelves_path)
-        elif kwargs['bookmarks']:
-            if os.path.isdir(self.manager.bookmarks_path):
-                print(self.manager.bookmarks_path)
-            else:
-                return 1
-        else:
-            print(self.manager.path)
+        print(self.manager.archive_path)
         return 0
 
     def bookmark(self, **kwargs):

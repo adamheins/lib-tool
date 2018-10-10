@@ -5,9 +5,7 @@ zstyle ':completion:*:*:lib:*:*' verbose no
 
 
 # Get the path to the library.
-local libpath=$(lib where)
-local archivepath=$(lib where -a)
-local shelvespath=$(lib where -s)
+local archivepath=$(lib where)
 
 
 # Completion for top-level commands.
@@ -20,15 +18,8 @@ _lib_cmds() {
 }
 
 
-_lib_where() {
-  _arguments '-a' '--archive' \
-             '-b' '--bookmarks' \
-             '-s' '--shelves'
-}
-
-
 _lib_cd() {
-  _path_files -W libpath -/
+  _path_files -W archivepath -/
 }
 
 
@@ -43,9 +34,8 @@ _lib_key() {
 _lib_open() {
   # Here we use both a custom list of completion strings and the files in the
   # shelves directory.
-  local opts=($(lib complete keys-and-links))
+  local opts=($(lib complete keys))
   _alternative 'args: :((-b\:"open bibtex"))' \
-               'files: :_path_files -W shelvespath -/' \
                "links: :_values key $opts"
 }
 
@@ -61,7 +51,7 @@ _lib_add() {
 
 
 _lib_link() {
-  local paths=($archivepath $shelvespath)
+  local paths=($archivepath)
   _arguments '-f:link:_files' '--fix:link:_files' \
              '1: :_path_files -W paths -/'
 }
@@ -85,13 +75,11 @@ case $state in
   (args)
     case $line[1] in
       (link|ln)     _lib_link ;;
-      (bookmark|bm) _lib_key ;;
       (browse|search|grep) _lib_browse ;;
       (cd)          _lib_cd ;;
       (open)        _lib_open ;;
       (add)         _lib_add  ;;
       (rekey)       _lib_key ;;
-      (where)       _lib_where ;;
     esac
     ;;
 esac
