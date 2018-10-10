@@ -245,7 +245,7 @@ class LibraryManager(object):
                     return doc.bibtex['year']
                 if sort == 'added':
                     return doc.added_date
-                if sort == 'recent':
+                if sort == 'accessed':
                     return doc.accessed_date
                 if sort == 'matches':
                     return count

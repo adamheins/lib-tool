@@ -57,8 +57,8 @@ _lib_link() {
 
 _lib_browse() {
   _arguments '--key' '--author' '--title' '--year' '--venue' '--type' '--text' \
-             '-s: :(key title year added recent matches)' \
-             '--sort: :(key title year added recent matches)' \
+             '-s: :(key title year added accessed matches)' \
+             '--sort: :(key title year added accessed matches)' \
              '-n' '--number' \
              '-v' '-vv' '--verbose' \
              '-r' '--reverse'
