@@ -274,13 +274,8 @@ class ArchivalDocument(object):
         self.added_date = self._read_date('added.txt')
         self.accessed_date = self._read_date('accessed.txt')
 
-    def tag(self, tags):
-        ''' Add one or more tags to the document. 'tags' may be a string
-            representing a single tag, or a list of tags. '''
-        if type(tags) == list:
-            self.tags.extend(tags)
-        else:
-            self.tags.append(tags)
+    def _save_tags(self):
+        ''' Save list of tags to a file. '''
         with open(self.paths.tag_path, 'w') as f:
             f.write('\n'.join(self.tags))
 
@@ -299,6 +294,24 @@ class ArchivalDocument(object):
         with open(path, 'w') as f:
             f.write(date.isoformat())
         return date
+
+    def rename_tag(self, current_tag, new_tag):
+        ''' Rename a tag, if it has been applied to this document. '''
+        try:
+            idx = self.tags.index(current_tag)
+            self.tags[idx] = new_tag
+            self._save_tags()
+        except ValueError:
+            pass
+
+    def tag(self, tags):
+        ''' Add one or more tags to the document. 'tags' may be a string
+            representing a single tag, or a list of tags. '''
+        if type(tags) == list:
+            self.tags.extend(tags)
+        else:
+            self.tags.append(tags)
+        self._save_tags()
 
     def text(self):
         ''' Retrieve the plain text of the PDF file.

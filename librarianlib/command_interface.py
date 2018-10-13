@@ -135,3 +135,15 @@ class LibraryCommandInterface(object):
         key = sanitize_key(kwargs['key'])
         new_key = self.manager.rekey(key, kwargs['new-key'])
         print('Renamed {} to {}.'.format(key, new_key))
+
+    def list_tags(self, **kwargs):
+        ''' List all tags. '''
+        if kwargs['rename']:
+            current_tag, new_tag = kwargs['rename'][0], kwargs['rename'][1]
+            self.manager.rename_tag(current_tag, new_tag)
+            print('Renamed all instances of {} to {}.'.format(current_tag, new_tag))
+        else:
+            tag_count_list = self.manager.get_tags()
+            n = kwargs['number'] if kwargs['number'] else len(tag_count_list)
+            for item in tag_count_list[0:n]:
+                print('{} ({})'.format(item[0], item[1]))

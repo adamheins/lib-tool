@@ -96,16 +96,23 @@ def parse_args(cmd_interface):
                                  help='Name for the bookmark.')
     bookmark_parser.set_defaults(func=cmd_interface.bookmark)
 
-    # Hidden subcommand for generating completion list of keys.
-    complete_parser = subparsers.add_parser('complete', help=argparse.SUPPRESS)
-    complete_parser.set_defaults(func=cmd_interface.complete)
-
+    # rekey subcommand.
     rekey_parser = subparsers.add_parser(
             'rekey', aliases=['rename'],
             help='Change the name of a key.')
     rekey_parser.add_argument('key', help='The key to change.')
     rekey_parser.add_argument('new-key', nargs='?', help='New key name.')
     rekey_parser.set_defaults(func=cmd_interface.rekey)
+
+    tags_parser = subparsers.add_parser('tags', help='List all tags.')
+    tags_parser.add_argument('-n', '--number', type=int,
+                             help='Limit the number of results.')
+    tags_parser.add_argument('--rename', nargs=2, help='Rename a key.')
+    tags_parser.set_defaults(func=cmd_interface.list_tags)
+
+    # Hidden subcommand for generating completion list of keys.
+    complete_parser = subparsers.add_parser('complete', help=argparse.SUPPRESS)
+    complete_parser.set_defaults(func=cmd_interface.complete)
 
     # Every subparser has an associated function, that we extract here.
     args = parser.parse_args()

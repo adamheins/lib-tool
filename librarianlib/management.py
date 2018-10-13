@@ -202,19 +202,38 @@ class LibraryManager(object):
             self.fix_link(link)
 
     def tag(self, key, tags):
+        ''' Apply one or more tags to a document.
+            Params:
+                key - Key for document to tag.
+                tags - Comma-separated string of tags.
+            Returns:
+                None '''
         tags = tags.split(',')
         self.get_doc(key).tag(tags)
 
-    def bookmark(self, key, name):
-        ''' Create a bookmark 'name' pointing to the key. '''
-        # Create the bookmarks directory if it doesn't already exist.
-        if not os.path.isdir(self.bookmarks_path):
-            os.mkdir(self.self.bookmarks_path)
-            print('Created bookmarks directory at: {}'.format(self.bookmarks_path))
+    def get_tags(self):
+        ''' Get a list of (tag, count) tuples, ordered from most to least
+            frequent. '''
+        tag_count_map = {}
+        for doc in self.all_docs():
+            for tag in doc.tags:
+                if tag in tag_count_map:
+                    tag_count_map[tag] += 1
+                else:
+                    tag_count_map[tag] = 1
+        tag_count_list = [(tag, count) for tag, count in tag_count_map.items()]
+        tag_count_list.sort(key=lambda x: x[1], reverse=True)
+        return tag_count_list
 
-        name = name if name is not None else key
-        path = os.path.join(self.bookmarks_path, name)
-        self.link(key, path)
+    def rename_tag(self, current_tag, new_tag):
+        ''' Rename all instances of a tag.
+            Params:
+                current_tag - Current name of the tag.
+                new_tag - New tag name.
+            Returns:
+                None '''
+        for doc in self.all_docs():
+            doc.rename_tag(current_tag, new_tag)
 
     def search_docs(self, key=None, title=None, author=None, year=None,
                     venue=None, entrytype=None, text=None, tags=None,
