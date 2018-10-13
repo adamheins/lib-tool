@@ -12,7 +12,7 @@ local archivepath=$(lib where)
 _lib_cmds() {
   local subcmds=('open:open' 'add:add' 'browse:browse' 'search:search' \
                  'link:link' 'ln:ln' 'where:where' 'cd:cd' 'rekey:rekey' \
-                 'rename:rename')
+                 'rename:rename', 'tag:tag', 'tags:tags')
   _describe 'command' subcmds
 }
 
@@ -33,9 +33,9 @@ _lib_key() {
 _lib_open() {
   # Here we use both a custom list of completion strings and the files in the
   # shelves directory.
-  local opts=($(lib complete))
+  local keys=($(lib complete))
   _alternative 'args: :((-b\:"open bibtex"))' \
-               "links: :_values key $opts"
+               "links: :_values key $keys"
 }
 
 
@@ -64,6 +64,16 @@ _lib_browse() {
              '-r' '--reverse'
 }
 
+_lib_tag() {
+  local keys=($(lib complete))
+  # TODO this only completes a single key at the moment
+  _arguments "--keys:keys:_values key $keys" '--tags'
+}
+
+_lib_tags() {
+  _arguments -s '-n' '--number' '--rename'
+}
+
 
 # We require an initial command, potentially followed by some arguments.
 _arguments -C '1: :_lib_cmds' '*::args:->args'
@@ -79,6 +89,8 @@ case $state in
       (open)        _lib_open ;;
       (add)         _lib_add  ;;
       (rekey)       _lib_key ;;
+      (tag)         _lib_tag ;;
+      (tags)        _lib_tags ;;
     esac
     ;;
 esac

@@ -6,6 +6,7 @@ import yaml
 # Third party.
 import bibtexparser
 from bibtexparser.bwriter import BibTexWriter
+import pyparsing
 
 # Ours.
 from .document import DocumentPaths, ArchivalDocument, DocumentTemplate
@@ -24,7 +25,10 @@ def _find_config(search_dirs, config_name):
 def _key_from_bibtex(bib_path):
     ''' Extract the document key from a bibtex file. '''
     with open(bib_path) as bib_file:
-        bib_info = bibtexparser.load(bib_file)
+        try:
+            bib_info = bibtexparser.load(bib_file)
+        except pyparsing.ParseException:
+            raise LibraryException('Failed to parse bibtex file.')
 
     keys = list(bib_info.entries_dict.keys())
     if len(keys) > 1:
@@ -45,14 +49,11 @@ class LibraryManager(object):
 
         self.path = os.path.expanduser(config['library'])
         self.archive_path = os.path.join(self.path, 'archive')
-        self.shelves_path = os.path.join(self.path, 'shelves')
-        self.bookmarks_path = os.path.join(self.path, 'bookmarks')
 
-        # Check if each of these directories exist.
-        for path in [self.path, self.archive_path, self.shelves_path]:
-            if not os.path.isdir(path):
-                msg = '{} does not exist!'.format(path)
-                raise LibraryException(msg)
+        # Check that the archive exists.
+        if not os.path.isdir(self.archive_path):
+            msg = '{} does not exist!'.format(self.archive_path)
+            raise LibraryException(msg)
 
     def has_key(self, key):
         ''' Returns True if the key is in the archive, false otherwise. '''
@@ -173,8 +174,6 @@ class LibraryManager(object):
                 tags - Comma-separated string of tags.
             Returns:
                 None '''
-        # TODO I would prefer tags to be a list
-        tags = tags.split(',')
         self.get_doc(key).tag(tags)
 
     def get_tags(self):

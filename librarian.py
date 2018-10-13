@@ -61,7 +61,7 @@ def parse_args(cmd_interface):
     add_parser.add_argument('bibtex', help='Associated bibtex file.')
     add_parser.add_argument('-d', '--delete', action='store_true',
                             help='Delete files after archiving.')
-    add_parser.add_argument('-t', '--tag',
+    add_parser.add_argument('-t', '--tag', nargs='+',
                             help='Apply one or more tags to the document.')
     add_parser.set_defaults(func=cmd_interface.add)
 
@@ -71,7 +71,7 @@ def parse_args(cmd_interface):
     open_parser.add_argument('key', help='Key for document to open.')
     open_parser.add_argument('-b', '--bib', '--bibtex', action='store_true',
                              help='Open bibtex file.')
-    open_parser.add_argument('-t', '--tag',action='store_true',
+    open_parser.add_argument('-t', '--tag', action='store_true',
                              help='Open tag file.')
     open_parser.set_defaults(func=cmd_interface.open)
 
@@ -104,6 +104,15 @@ def parse_args(cmd_interface):
     rekey_parser.add_argument('new-key', nargs='?', help='New key name.')
     rekey_parser.set_defaults(func=cmd_interface.rekey)
 
+    # tag subcommand.
+    tag_parser = subparsers.add_parser('tag', help='Add tags to documents.')
+    tag_parser.add_argument('-k', '--key', '--keys', nargs='+', required=True,
+                            help='Keys to add the tags to.')
+    tag_parser.add_argument('-t', '--tag', '--tags', nargs='+', required=True,
+                            help='Tags to apply.')
+    tag_parser.set_defaults(func=cmd_interface.add_tags)
+
+    # tags subcommand.
     tags_parser = subparsers.add_parser('tags', help='List all tags.')
     tags_parser.add_argument('-n', '--number', type=int,
                              help='Limit the number of results.')

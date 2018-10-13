@@ -182,6 +182,12 @@ class LibraryCommandInterface(object):
         new_key = self.manager.rekey(key, kwargs['new-key'])
         print('Renamed {} to {}.'.format(key, new_key))
 
+    def add_tags(self, **kwargs):
+        keys = kwargs['keys']
+        tags = kwargs['tags']
+        for key in keys:
+            self.manager.get_doc(key).tag(tags)
+
     def list_tags(self, **kwargs):
         ''' List all tags. '''
         if kwargs['rename']:
