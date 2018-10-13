@@ -1,11 +1,44 @@
 import os
 import shutil
 import subprocess
+import textwrap
 
 import editor
 
+from . import style
 
-def sanitize_key(key):
+
+def _summarize_doc(doc, count, verbosity):
+    ''' Create a string summary of a document. '''
+    if count > 0:
+        count_phrase = ' (Matches = {count})'
+    else:
+        count_phrase = ''
+
+    if doc.venue:
+        venue_phrase = '\n{venue}'
+    else:
+        venue_phrase = ''
+
+    if verbosity == 1:
+        tmpl = ''.join(['{title}\n{year} ({key})', count_phrase, '\n{author}'])
+    elif verbosity == 2:
+        tmpl = ''.join(['{title}\n{year} ({key})', count_phrase, '\n{author}',
+                        venue_phrase])
+    else:
+        tmpl = ''.join(['{key}', count_phrase])
+
+    # Wrap the title at 80 chars.
+    title = textwrap.fill(doc.title, width=80)
+    title = style.bold(title)
+    key = style.yellow(doc.key)
+    authors = '; '.join(doc.authors)
+
+    return tmpl.format(title=title, year=doc.year, key=key, author=authors,
+                       venue=doc.venue, count=count)
+
+
+def _sanitize_key(key):
     ''' Clean up a user-supplied document key. '''
     if key is None:
         return None
@@ -25,7 +58,7 @@ class LibraryCommandInterface(object):
 
     def open(self, **kwargs):
         ''' Open a document for viewing. '''
-        key = sanitize_key(kwargs['key'])
+        key = _sanitize_key(kwargs['key'])
         doc = self.manager.get_doc(key)
         doc.access()
         if kwargs['bib']:
@@ -43,7 +76,7 @@ class LibraryCommandInterface(object):
 
     def link(self, **kwargs):
         ''' Create a symlink to the document in the archive. '''
-        key = sanitize_key(kwargs['key'])
+        key = _sanitize_key(kwargs['key'])
 
         if kwargs['fix']:
             if os.path.isdir(key):
@@ -74,11 +107,24 @@ class LibraryCommandInterface(object):
         results = self.manager.search_docs(key=key, title=title, author=author,
                                            year=year, venue=venue,
                                            entrytype=entrytype, text=text,
-                                           tags=tags, sort=sort, number=number,
-                                           reverse=reverse,
-                                           verbosity=verbosity)
-        if results:
-            print(results)
+                                           tags=tags, sort=sort,
+                                           reverse=reverse)
+        # Limit the number of results.
+        if number:
+            results = results[:number]
+
+        # Format the results.
+        summaries = []
+        for doc, count in results:
+            summaries.append(_summarize_doc(doc, count, verbosity))
+
+        if len(summaries) == 0:
+            return
+        elif verbosity > 0:
+            summary = '\n\n'.join(summaries)
+        else:
+            summary = '\n'.join(summaries)
+        print(summary)
 
     def compile(self, **kwargs):
         ''' Compile a single bibtex file and/or a single directory of PDFs. '''
@@ -122,7 +168,7 @@ class LibraryCommandInterface(object):
     def bookmark(self, **kwargs):
         ''' Bookmark a document. This creates a symlink to the document in the
             bookmarks directory. '''
-        key = sanitize_key(kwargs['key'])
+        key = _sanitize_key(kwargs['key'])
         self.manager.bookmark(key, kwargs['name'])
 
     def complete(self, **kwargs):
@@ -132,7 +178,7 @@ class LibraryCommandInterface(object):
 
     def rekey(self, **kwargs):
         ''' Change the name of a key. '''
-        key = sanitize_key(kwargs['key'])
+        key = _sanitize_key(kwargs['key'])
         new_key = self.manager.rekey(key, kwargs['new-key'])
         print('Renamed {} to {}.'.format(key, new_key))
 
@@ -147,5 +193,5 @@ class LibraryCommandInterface(object):
             n = kwargs['number'] if kwargs['number'] else len(tag_count_list)
             l = len(max(tag_count_list, key=lambda x: len(x[0]))[0])
             tmpl = '{tag:<{l}} {count}'
-            for item in tag_count_list[0:n]:
+            for item in tag_count_list[:n]:
                 print(tmpl.format(tag=item[0], count=item[1], l=l+1))

@@ -1,8 +1,6 @@
 # Built-in.
 import os
 import shutil
-import sys
-import textwrap
 import yaml
 
 # Third party.
@@ -12,7 +10,6 @@ from bibtexparser.bwriter import BibTexWriter
 # Ours.
 from .document import DocumentPaths, ArchivalDocument, DocumentTemplate
 from .exceptions import LibraryException
-from . import style
 
 
 def _find_config(search_dirs, config_name):
@@ -34,36 +31,6 @@ def _key_from_bibtex(bib_path):
         raise LibraryException('More than one entry in bibtex file.')
 
     return keys[0]
-
-
-def _summarize_doc(doc, count, verbosity):
-    ''' Create a string summary of a document. '''
-    if count > 0:
-        count_phrase = ' (Matches = {count})'
-    else:
-        count_phrase = ''
-
-    if doc.venue:
-        venue_phrase = '\n{venue}'
-    else:
-        venue_phrase = ''
-
-    if verbosity == 1:
-        tmpl = ''.join(['{title}\n{year} ({key})', count_phrase, '\n{author}'])
-    elif verbosity == 2:
-        tmpl = ''.join(['{title}\n{year} ({key})', count_phrase, '\n{author}',
-                        venue_phrase])
-    else:
-        tmpl = ''.join(['{key}', count_phrase])
-
-    # Wrap the title at 80 chars.
-    title = textwrap.fill(doc.title, width=80)
-    title = style.bold(title)
-
-    # TODO I would rather do this in command_interface
-    return tmpl.format(title=title, year=doc.year, key=doc.key,
-                       author='; '.join(doc.authors), venue=doc.venue,
-                       count=count)
 
 
 class LibraryManager(object):
@@ -173,8 +140,8 @@ class LibraryManager(object):
             dest = os.path.join(os.getcwd(), path)
 
         if os.path.exists(dest):
-            message = 'Symlink {} already exists. Aborting.'.format(path)
-            raise LibraryException(message)
+            msg = 'Symlink {} already exists. Aborting.'.format(path)
+            raise LibraryException(msg)
 
         os.symlink(src, dest)
 
@@ -186,8 +153,8 @@ class LibraryManager(object):
         key = os.path.basename(os.readlink(link))
 
         if not self.has_key(key):
-            print('{} does not point to a document in the archive.'.format(link))
-            return 1
+            msg = 'No document with key {} is in the archive.'.format(link)
+            raise LibraryException(msg)
 
         # Recreate the link, pointing to the correct location.
         os.remove(link)
@@ -236,7 +203,7 @@ class LibraryManager(object):
 
     def search_docs(self, key=None, title=None, author=None, year=None,
                     venue=None, entrytype=None, text=None, tags=None,
-                    sort=None, number=None, reverse=False, verbosity=0):
+                    sort=None, reverse=False):
         ''' Search documents for those that match the provided filters and
             produce a summary of the results. '''
         # Find documents matching the criteria.
@@ -275,19 +242,4 @@ class LibraryManager(object):
                                  reverse=reverse)
             docs, counts = tuple(zip(*docs_counts))
 
-        # Limit the number of results.
-        if number:
-            docs = docs[:number]
-
-        # Format the results.
-        summaries = []
-        for doc, count in zip(docs, counts):
-            summaries.append(_summarize_doc(doc, count, verbosity))
-
-        if len(summaries) == 0:
-            return None
-        elif verbosity > 0:
-            summary = '\n\n'.join(summaries)
-        else:
-            summary = '\n'.join(summaries)
-        return summary
+        return zip(docs, counts)
