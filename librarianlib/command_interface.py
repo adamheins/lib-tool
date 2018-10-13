@@ -145,5 +145,7 @@ class LibraryCommandInterface(object):
         else:
             tag_count_list = self.manager.get_tags()
             n = kwargs['number'] if kwargs['number'] else len(tag_count_list)
+            l = len(max(tag_count_list, key=lambda x: len(x[0]))[0])
+            tmpl = '{tag:<{l}} {count}'
             for item in tag_count_list[0:n]:
-                print('{} ({})'.format(item[0], item[1]))
+                print(tmpl.format(tag=item[0], count=item[1], l=l+1))

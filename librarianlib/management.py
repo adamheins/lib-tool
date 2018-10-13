@@ -58,11 +58,9 @@ def _summarize_doc(doc, count, verbosity):
 
     # Wrap the title at 80 chars.
     title = textwrap.fill(doc.title, width=80)
+    title = style.bold(title)
 
-    # Only apply styling if output is a terminal.
-    if sys.stdout.isatty():
-        title = style.bold(title)
-
+    # TODO I would rather do this in command_interface
     return tmpl.format(title=title, year=doc.year, key=doc.key,
                        author='; '.join(doc.authors), venue=doc.venue,
                        count=count)
@@ -208,6 +206,7 @@ class LibraryManager(object):
                 tags - Comma-separated string of tags.
             Returns:
                 None '''
+        # TODO I would prefer tags to be a list
         tags = tags.split(',')
         self.get_doc(key).tag(tags)
 

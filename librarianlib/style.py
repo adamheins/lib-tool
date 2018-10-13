@@ -1,9 +1,15 @@
+import sys
+
 import colorama
 
 
 def yellow(s):
-    return colorama.Fore.YELLOW + s + colorama.Fore.RESET
+    if sys.stdout.isatty():
+        return colorama.Fore.YELLOW + s + colorama.Fore.RESET
+    return s
 
 
 def bold(s):
-    return colorama.Style.BRIGHT + s + colorama.Style.RESET_ALL
+    if sys.stdout.isatty():
+        return colorama.Style.BRIGHT + s + colorama.Style.RESET_ALL
+    return s
